@@ -31,9 +31,23 @@ object BotReminders {
     private const val ID_SPAN = 1_000_000
     private const val DAY_MS = 24L * 60L * 60L * 1000L
 
-    // Identic cu _kDefaultSmsTemplate din Dart.
-    private const val DEFAULT_TEMPLATE =
+    // Identice cu _kDefaultSmsTemplateRo / _kDefaultSmsTemplateEn din Dart.
+    const val DEFAULT_TEMPLATE_RO =
         "Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare."
+    const val DEFAULT_TEMPLATE_EN =
+        "Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps."
+
+    /**
+     * Mesajul implicit urmează limba aplicației. Unul salvat identic cu un
+     * mesaj implicit e tratat tot ca implicit; unul editat de utilizator
+     * rămâne neatins la schimbarea limbii (ca _effectiveSmsTemplate din Dart).
+     */
+    fun effectiveTemplate(saved: String?): String =
+        if (saved.isNullOrBlank() || saved == DEFAULT_TEMPLATE_RO || saved == DEFAULT_TEMPLATE_EN) {
+            tr(DEFAULT_TEMPLATE_RO, DEFAULT_TEMPLATE_EN)
+        } else {
+            saved
+        }
 
     private val DISPLAY_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
 
@@ -52,8 +66,12 @@ object BotReminders {
     }
 
     /** Textul reminderului, cu template-ul ales în aplicație (ca SmsService din Dart). */
+    // Variabilele au nume în ambele limbi; un mesaj scris cu cele românești
+    // funcționează și cu aplicația în engleză, și invers.
     fun buildMessage(template: String, name: String, expiresAt: LocalDateTime): String =
-        template.replace("[NUME]", name).replace("[DATA_EXPIRARE]", expiresAt.format(DISPLAY_FMT))
+        template.replace("[NUME]", name).replace("[NAME]", name)
+            .replace("[DATA_EXPIRARE]", expiresAt.format(DISPLAY_FMT))
+            .replace("[EXPIRY_DATE]", expiresAt.format(DISPLAY_FMT))
 
     fun schedule(
         context: Context, syncId: String, phone: String, name: String,
@@ -61,8 +79,11 @@ object BotReminders {
     ) {
         val atMs = warningAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (atMs <= System.currentTimeMillis()) return
-        val template = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            .getString("flutter.sms_template", null)?.takeIf { it.isNotBlank() } ?: DEFAULT_TEMPLATE
+        AppLang.sync(context)
+        val template = effectiveTemplate(
+            context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                .getString("flutter.sms_template", null)
+        )
         val id = synchronized(LOCK) {
             val p = prefs(context)
             val entries = readEntries(p)

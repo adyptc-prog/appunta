@@ -57,6 +57,9 @@ android {
     testOptions {
         // Robolectric: testele JVM rulează receiverele și SharedPreferences reale.
         unitTests.isIncludeAndroidResources = true
+        // Testele verifică textele în română: fixează limba telefonului simulat
+        // (AppLang), indiferent de limba mașinii. Testele pentru engleză o aleg explicit.
+        unitTests.all { it.systemProperty("applang.testDeviceLanguage", "ro") }
     }
 
     buildTypes {

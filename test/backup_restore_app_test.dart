@@ -90,7 +90,7 @@ void main() {
     expect(find.text('Backup restaurat. Datele au fost reîncărcate.'),
         findsOneWidget);
 
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     expect(find.text('Ana Popescu'), findsNothing);

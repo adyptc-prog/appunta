@@ -69,7 +69,10 @@ object BackupPassword {
 
     fun set(context: Context, password: String) {
         require(BackupCrypto.isValidPassword(password)) {
-            "Parola trebuie să aibă minim ${BackupCrypto.MIN_PASSWORD_LENGTH} caractere."
+            tr(
+                "Parola trebuie să aibă minim ${BackupCrypto.MIN_PASSWORD_LENGTH} caractere.",
+                "The password must have at least ${BackupCrypto.MIN_PASSWORD_LENGTH} characters.",
+            )
         }
         prefs(context).edit()
             .putString(KEY_SEALED, box.seal(password.toByteArray(Charsets.UTF_8)))

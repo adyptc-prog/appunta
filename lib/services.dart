@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n.dart';
+
 // ─── Servicii (per tabel) ─────────────────────────────────────────────────────
 // Fiecare tabel e o categorie (ex. „Unghii”) cu propriile servicii, fiecare cu
 // durata lui. Botul SMS le oferă clientului și calculează orele libere după
@@ -99,7 +101,7 @@ String formatServiceDuration(int minutes) {
   if (minutes < 60) return '$minutes min';
   final h = minutes ~/ 60;
   final m = minutes % 60;
-  if (m == 0) return '$h ${h == 1 ? "oră" : "ore"}';
+  if (m == 0) return tr('$h ${h == 1 ? "oră" : "ore"}', '$h ${h == 1 ? "hour" : "hours"}');
   return '${h}h ${m}min';
 }
 
@@ -188,16 +190,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Ștergi serviciul?'),
-        content: Text('„${s.name}” nu va mai fi oferit clienților prin SMS. '
-            'Programările existente nu se modifică.'),
+        title: Text(tr('Ștergi serviciul?', 'Delete the service?')),
+        content: Text(tr('„${s.name}” nu va mai fi oferit clienților prin SMS. '
+            'Programările existente nu se modifică.',
+        '“${s.name}” will no longer be offered to clients by SMS. '
+        'Existing appointments are not changed.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Anulează')),
+              child: Text(tr('Anulează', 'Cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Șterge')),
+              child: Text(tr('Șterge', 'Delete'))),
         ],
       ),
     );
@@ -208,7 +212,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final v = await showDialog<int>(
       context: context,
       builder: (_) => _DurationDialog(
-        title: 'Durată implicită',
+        title: tr('Durată implicită', 'Default duration'),
         initial: _defaultMin,
       ),
     );
@@ -224,7 +228,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final d = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Ore libere pentru'),
+        title: Text(tr('Ore libere pentru', 'Free times for')),
         children: [
           for (final s in _services)
             SimpleDialogOption(
@@ -246,7 +250,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Servicii – ${widget.boardName}'),
+          title: Text(tr('Servicii – ${widget.boardName}', 'Services – ${widget.boardName}')),
           leading: BackButton(onPressed: _finish),
         ),
         floatingActionButton: _services.length >= kMaxServices
@@ -254,25 +258,30 @@ class _ServicesScreenState extends State<ServicesScreen> {
             : FloatingActionButton.extended(
                 onPressed: () => _editService(),
                 icon: const Icon(Icons.add),
-                label: const Text('Adaugă serviciu'),
+                label: Text(tr('Adaugă serviciu', 'Add service')),
               ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
             Text(
-              'Clientul scrie „liber ${widget.boardName.toLowerCase()}” și '
+              tr('Clientul scrie „liber ${widget.boardName.toLowerCase()}” și '
               'primește lista de mai jos. După ce alege serviciul, primește '
               'orele libere calculate cu durata lui.',
+              'The client texts “free ${widget.boardName.toLowerCase()}” and '
+              'receives the list below. After choosing the service, they receive '
+              'the free times calculated with its duration.'),
               style: const TextStyle(fontSize: 13, color: Colors.black54),
             ),
             const SizedBox(height: 12),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.timer_outlined),
-                title: const Text('Durată implicită'),
-                subtitle: const Text(
-                    'Pentru programările fără serviciu și când tabelul nu '
-                    'are servicii.'),
+                title: Text(tr('Durată implicită', 'Default duration')),
+                subtitle: Text(
+                    tr('Pentru programările fără serviciu și când tabelul nu '
+                    'are servicii.',
+                    'For appointments without a service and when the table has '
+                    'no services.')),
                 trailing: Text(formatServiceDuration(_defaultMin),
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 onTap: _editDefault,
@@ -280,11 +289,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ),
             const SizedBox(height: 12),
             if (_services.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Text(
-                  'Niciun serviciu. Adaugă serviciile acestui tabel '
+                  tr('Niciun serviciu. Adaugă serviciile acestui tabel '
                   '(ex. Semipermanentă – 1 oră).',
+                  'No services. Add the services of this table '
+                  '(e.g. Gel polish – 1 hour).'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.black54),
                 ),
@@ -317,7 +328,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         onTap: () => _editService(i),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Șterge',
+                          tooltip: tr('Șterge', 'Delete'),
                           onPressed: () => _deleteService(i),
                         ),
                       ),
@@ -325,10 +336,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ],
               ),
             if (_services.length > 1)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
-                  'Ține apăsat pe număr și trage pentru a schimba ordinea.',
+                  tr('Ține apăsat pe număr și trage pentru a schimba ordinea.', 'Press and hold the number and drag to change the order.'),
                   style: TextStyle(fontSize: 11, color: Colors.black45),
                 ),
               ),
@@ -339,13 +350,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
               OutlinedButton.icon(
                 onPressed: () => _finish(freeSlotsDuration: 0),
                 icon: const Icon(Icons.unfold_less_rounded),
-                label: const Text('Ascunde orele libere din tabel'),
+                label: Text(tr('Ascunde orele libere din tabel', 'Hide free times in the table')),
               )
             else
               OutlinedButton.icon(
                 onPressed: _showFreeSlots,
                 icon: const Icon(Icons.unfold_more_rounded),
-                label: const Text('Arată orele libere în tabel'),
+                label: Text(tr('Arată orele libere în tabel', 'Show free times in the table')),
               ),
           ],
         ),
@@ -396,8 +407,8 @@ class _DurationPicker extends StatelessWidget {
               child: TextField(
                 controller: hours,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Ore', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: tr('Ore', 'Hours'), border: OutlineInputBorder()),
                 onChanged: (_) => onChanged(),
               ),
             ),
@@ -406,8 +417,8 @@ class _DurationPicker extends StatelessWidget {
               child: TextField(
                 controller: minutes,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Minute', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: tr('Minute', 'Minutes'), border: OutlineInputBorder()),
                 onChanged: (_) => onChanged(),
               ),
             ),
@@ -427,8 +438,10 @@ int? _readDuration(TextEditingController h, TextEditingController m) {
 }
 
 String get _durationError =>
-    'Durata trebuie să fie între $kMinServiceDuration minute și '
-    '${kMaxServiceDuration ~/ 60} ore.';
+    tr('Durata trebuie să fie între $kMinServiceDuration minute și '
+    '${kMaxServiceDuration ~/ 60} ore.',
+    'The duration must be between $kMinServiceDuration minutes and '
+    '${kMaxServiceDuration ~/ 60} hours.');
 
 class _ServiceDialog extends StatefulWidget {
   final SalonService? existing;
@@ -461,9 +474,9 @@ class _ServiceDialogState extends State<_ServiceDialog> {
     final duration = _readDuration(_hours, _minutes);
     String? error;
     if (name.isEmpty) {
-      error = 'Scrie numele serviciului.';
+      error = tr('Scrie numele serviciului.', 'Enter the service name.');
     } else if (widget.takenNames.contains(_normName(name))) {
-      error = 'Există deja un serviciu cu acest nume.';
+      error = tr('Există deja un serviciu cu acest nume.', 'A service with this name already exists.');
     } else if (duration == null) {
       error = _durationError;
     }
@@ -477,7 +490,7 @@ class _ServiceDialogState extends State<_ServiceDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.existing == null ? 'Serviciu nou' : 'Editează serviciul'),
+      title: Text(widget.existing == null ? tr('Serviciu nou', 'New service') : tr('Editează serviciul', 'Edit service')),
       content: SizedBox(
         width: 360,
         child: SingleChildScrollView(
@@ -490,12 +503,12 @@ class _ServiceDialogState extends State<_ServiceDialog> {
                 autofocus: widget.existing == null,
                 maxLength: kMaxServiceNameLength,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                    labelText: 'Nume serviciu (ex. Semipermanentă)',
+                decoration: InputDecoration(
+                    labelText: tr('Nume serviciu (ex. Semipermanentă)', 'Service name (e.g. Gel polish)'),
                     border: OutlineInputBorder()),
               ),
               const SizedBox(height: 4),
-              const Text('Durată', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(tr('Durată', 'Duration'), style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               _DurationPicker(
                   hours: _hours,
@@ -514,8 +527,8 @@ class _ServiceDialogState extends State<_ServiceDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Anulează')),
-        FilledButton(onPressed: _save, child: const Text('Salvează')),
+            child: Text(tr('Anulează', 'Cancel'))),
+        FilledButton(onPressed: _save, child: Text(tr('Salvează', 'Save'))),
       ],
     );
   }
@@ -569,7 +582,7 @@ class _DurationDialogState extends State<_DurationDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Anulează')),
+            child: Text(tr('Anulează', 'Cancel'))),
         FilledButton(
           onPressed: () {
             final d = _readDuration(_hours, _minutes);
@@ -579,7 +592,7 @@ class _DurationDialogState extends State<_DurationDialog> {
             }
             Navigator.pop(context, d);
           },
-          child: const Text('Salvează'),
+          child: Text(tr('Salvează', 'Save')),
         ),
       ],
     );

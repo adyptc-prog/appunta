@@ -45,14 +45,14 @@ class MainActivity : FlutterActivity() {
         pendingLicensePickResult = null
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null) {
-            result.error("LICENSE_PICK_CANCELLED", "No license file was selected.", null)
+            result.error("LICENSE_PICK_CANCELLED", tr("Nu a fost selectat niciun fișier de licență.", "No license file was selected."), null)
             return
         }
 
         try {
             val content = contentResolver.openInputStream(uri)?.use {
                 it.reader(Charsets.UTF_8).readText()
-            } ?: throw IllegalStateException("Could not read license file.")
+            } ?: throw IllegalStateException(tr("Fișierul de licență nu a putut fi citit.", "Could not read license file."))
             result.success(LicenseStore.importLicense(this, content).toMap(uri.toString()))
         } catch (error: Exception) {
             result.error("LICENSE_PICK_FAILED", error.message ?: error.toString(), null)
@@ -62,11 +62,13 @@ class MainActivity : FlutterActivity() {
     // ── Flutter Engine ───────────────────────────────────────────────────────────
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        AppLang.sync(applicationContext)
         OrganizatorBackupWorker.schedule(applicationContext)
 
         // ── Canal Backup ──────────────────────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BACKUP_CHANNEL)
             .setMethodCallHandler { call, result ->
+                AppLang.sync(applicationContext)
                 when (call.method) {
                     "getStatus" -> runInBackground(result, "BACKUP_STATUS_FAILED") {
                         BackupManager.status(this)
@@ -118,6 +120,7 @@ class MainActivity : FlutterActivity() {
         // ── Canal SMS (alarme + sincronizare) ─────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SMS_CHANNEL)
             .setMethodCallHandler { call, result ->
+                AppLang.sync(applicationContext)
                 when (call.method) {
 
                     "schedule" -> {
@@ -209,6 +212,7 @@ class MainActivity : FlutterActivity() {
         // ── Canal Licență ─────────────────────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LICENSE_CHANNEL)
             .setMethodCallHandler { call, result ->
+                AppLang.sync(applicationContext)
                 when (call.method) {
 
                     // ── Flux nou: licență cu businessId + expirare, cumpărată de pe site ──
@@ -261,7 +265,7 @@ class MainActivity : FlutterActivity() {
     // Verificarea, stocarea și preluarea de la partener sunt în LicenseStore.
     private fun pickLicenseFile(result: MethodChannel.Result) {
         if (pendingLicensePickResult != null) {
-            result.error("LICENSE_PICK_BUSY", "A license picker is already open.", null)
+            result.error("LICENSE_PICK_BUSY", tr("Un selector de licență este deja deschis.", "A license picker is already open."), null)
             return
         }
 
@@ -292,7 +296,7 @@ class MainActivity : FlutterActivity() {
 
     private fun pickBackupFolder(destination: String, result: MethodChannel.Result) {
         if (pendingBackupFolderResult != null) {
-            result.error("BACKUP_PICK_BUSY", "A backup folder picker is already open.", null)
+            result.error("BACKUP_PICK_BUSY", tr("Un selector de folder este deja deschis.", "A backup folder picker is already open."), null)
             return
         }
         pendingBackupFolderResult = result
@@ -320,7 +324,7 @@ class MainActivity : FlutterActivity() {
         pendingBackupFolderResult = null
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null) {
-            result.error("BACKUP_PICK_CANCELLED", "No backup folder was selected.", null)
+            result.error("BACKUP_PICK_CANCELLED", tr("Nu a fost selectat niciun folder de backup.", "No backup folder was selected."), null)
             return
         }
         runInBackground(result, "BACKUP_PICK_FAILED") {
@@ -331,7 +335,7 @@ class MainActivity : FlutterActivity() {
 
     private fun pickAndRestoreBackup(keepSyncPartners: Boolean, result: MethodChannel.Result) {
         if (pendingRestoreResult != null) {
-            result.error("RESTORE_PICK_BUSY", "A backup picker is already open.", null)
+            result.error("RESTORE_PICK_BUSY", tr("Un selector de backup este deja deschis.", "A backup picker is already open."), null)
             return
         }
         pendingRestoreResult = result
@@ -349,7 +353,7 @@ class MainActivity : FlutterActivity() {
         pendingRestoreResult = null
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null) {
-            result.error("RESTORE_PICK_CANCELLED", "No backup file was selected.", null)
+            result.error("RESTORE_PICK_CANCELLED", tr("Nu a fost selectat niciun fișier de backup.", "No backup file was selected."), null)
             return
         }
         val keep = pendingRestoreKeepPartners

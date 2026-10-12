@@ -18,6 +18,7 @@ class NotifAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val alarmId = intent.getIntExtra("notif_alarm_id", -1)
         if (alarmId < 0) return
+        AppLang.sync(context)
 
         try {
             val prefs   = context.getSharedPreferences(
@@ -34,7 +35,7 @@ class NotifAlarmReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    "Alerte Organizator",
+                    tr("Alerte Organizator", "Organizator alerts"),
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply { enableVibration(true) }
                 nm.createNotificationChannel(channel)

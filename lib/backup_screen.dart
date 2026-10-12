@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'backup_service.dart';
+import 'l10n.dart';
 
 // ─── Ecran backup & restaurare ────────────────────────────────────────────────
 class BackupScreen extends StatefulWidget {
@@ -59,13 +60,13 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _pickFolder(String destination) => _run(() async {
         _status = await BackupService.pickFolder(destination);
-        _setMessage('Folderul de backup a fost setat.');
+        _setMessage(tr('Folderul de backup a fost setat.', 'The backup folder has been set.'));
       });
 
   Future<void> _create() => _run(() async {
         final b = await BackupService.createBackup();
         await _loadStatus();
-        _setMessage('Backup creat: ${b.name}');
+        _setMessage(tr('Backup creat: ${b.name}', 'Backup created: ${b.name}'));
       });
 
   // Confirmare + alegerea partenerilor de sincronizare; întoarce null la anulare.
@@ -75,22 +76,26 @@ class _BackupScreenState extends State<BackupScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDs) => AlertDialog(
-          title: const Text('Restaurezi backup-ul?'),
+          title: Text(tr('Restaurezi backup-ul?', 'Restore the backup?')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Toate datele actuale din aplicație vor fi înlocuite cu cele '
-                  'din $source.'),
+              Text(tr('Toate datele actuale din aplicație vor fi înlocuite cu cele '
+                  'din $source.',
+              'All current data in the app will be replaced with the data '
+              'from $source.')),
               const SizedBox(height: 12),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: keepPartners,
                 onChanged: (v) => setDs(() => keepPartners = v ?? true),
-                title: const Text('Păstrează partenerii de sincronizare actuali'),
-                subtitle: const Text(
-                  'Debifează doar dacă restaurezi pe același telefon de pe care '
+                title: Text(tr('Păstrează partenerii de sincronizare actuali', 'Keep the current sync partners')),
+                subtitle: Text(
+                  tr('Debifează doar dacă restaurezi pe același telefon de pe care '
                   'a fost făcut backup-ul.',
+                  'Untick only if you are restoring on the same phone '
+                  'the backup was made on.'),
                   style: TextStyle(fontSize: 12),
                 ),
               ),
@@ -99,11 +104,11 @@ class _BackupScreenState extends State<BackupScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Anulează'),
+              child: Text(tr('Anulează', 'Cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, keepPartners),
-              child: const Text('Restaurează'),
+              child: Text(tr('Restaurează', 'Restore')),
             ),
           ],
         ),
@@ -121,29 +126,31 @@ class _BackupScreenState extends State<BackupScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDs) => AlertDialog(
           title: Text(_status.hasPassword
-              ? 'Schimbă parola de backup'
-              : 'Setează parola de backup'),
+              ? tr('Schimbă parola de backup', 'Change the backup password')
+              : tr('Setează parola de backup', 'Set the backup password')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Backup-urile sunt criptate cu această parolă. Fără ea nu pot '
+              Text(
+                tr('Backup-urile sunt criptate cu această parolă. Fără ea nu pot '
                 'fi restaurate pe alt telefon — păstreaz-o într-un loc sigur.',
+                'Backups are encrypted with this password. Without it they cannot '
+                'be restored on another phone — keep it in a safe place.'),
                 style: TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: pw1,
                 obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: 'Parolă', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: tr('Parolă', 'Password'), border: OutlineInputBorder()),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: pw2,
                 obscureText: true,
                 decoration: InputDecoration(
-                    labelText: 'Repetă parola',
+                    labelText: tr('Repetă parola', 'Repeat the password'),
                     errorText: error,
                     border: const OutlineInputBorder()),
               ),
@@ -152,20 +159,20 @@ class _BackupScreenState extends State<BackupScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Anulează'),
+              child: Text(tr('Anulează', 'Cancel')),
             ),
             FilledButton(
               onPressed: () {
                 if (pw1.text.length < BackupService.minPasswordLength) {
                   setDs(() => error =
-                      'Minim ${BackupService.minPasswordLength} caractere.');
+                      tr('Minim ${BackupService.minPasswordLength} caractere.', 'At least ${BackupService.minPasswordLength} characters.'));
                 } else if (pw1.text != pw2.text) {
-                  setDs(() => error = 'Parolele nu coincid.');
+                  setDs(() => error = tr('Parolele nu coincid.', 'The passwords do not match.'));
                 } else {
                   Navigator.pop(ctx, pw1.text);
                 }
               },
-              child: const Text('Salvează'),
+              child: Text(tr('Salvează', 'Save')),
             ),
           ],
         ),
@@ -174,7 +181,7 @@ class _BackupScreenState extends State<BackupScreen> {
     if (password == null || !mounted) return;
     await _run(() async {
       _status = await BackupService.setPassword(password);
-      _setMessage('Parola de backup a fost salvată.');
+      _setMessage(tr('Parola de backup a fost salvată.', 'The backup password has been saved.'));
     });
   }
 
@@ -184,25 +191,25 @@ class _BackupScreenState extends State<BackupScreen> {
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Parola backup-ului'),
+        title: Text(tr('Parola backup-ului', 'Backup password')),
         content: TextField(
           controller: ctrl,
           obscureText: true,
           autofocus: true,
           decoration: InputDecoration(
-            labelText: 'Parolă',
-            errorText: wrong ? 'Parolă greșită. Încearcă din nou.' : null,
+            labelText: tr('Parolă', 'Password'),
+            errorText: wrong ? tr('Parolă greșită. Încearcă din nou.', 'Wrong password. Try again.') : null,
             border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Anulează'),
+            child: Text(tr('Anulează', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('Deschide'),
+            child: Text(tr('Deschide', 'Open')),
           ),
         ],
       ),
@@ -238,7 +245,7 @@ class _BackupScreenState extends State<BackupScreen> {
         await widget.onRestored?.call(ok);
       }
       await _loadStatus();
-      _setMessage('Backup restaurat. Datele au fost reîncărcate.');
+      _setMessage(tr('Backup restaurat. Datele au fost reîncărcate.', 'Backup restored. The data has been reloaded.'));
     });
   }
 
@@ -247,13 +254,13 @@ class _BackupScreenState extends State<BackupScreen> {
     await _run(() async => backups = await BackupService.listBackups());
     if (!mounted || backups == null) return; // eroarea e deja afișată
     if (backups!.isEmpty) {
-      setState(() => _setMessage('Nu există backup-uri în folderul ales.'));
+      setState(() => _setMessage(tr('Nu există backup-uri în folderul ales.', 'There are no backups in the chosen folder.')));
       return;
     }
     final chosen = await showDialog<BackupEntry>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Alege backup-ul'),
+        title: Text(tr('Alege backup-ul', 'Choose the backup')),
         children: [
           for (final b in backups!)
             SimpleDialogOption(
@@ -263,7 +270,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 leading: Icon(b.auto ? Icons.schedule : Icons.save_outlined),
                 title: Text(_formatDate(b.modifiedAt)),
                 subtitle: Text(
-                    '${b.auto ? 'Automat' : 'Manual'} · ${(b.size / 1024).toStringAsFixed(1)} KB'),
+                    tr('${b.auto ? 'Automat' : 'Manual'} · ${(b.size / 1024).toStringAsFixed(1)} KB', '${b.auto ? 'Automatic' : 'Manual'} · ${(b.size / 1024).toStringAsFixed(1)} KB')),
               ),
             ),
         ],
@@ -271,14 +278,14 @@ class _BackupScreenState extends State<BackupScreen> {
     );
     if (chosen == null || !mounted) return;
     await _restore(
-      'backup-ul din ${_formatDate(chosen.modifiedAt)}',
+      tr('backup-ul din ${_formatDate(chosen.modifiedAt)}', 'the backup from ${_formatDate(chosen.modifiedAt)}'),
       (keep, password) => BackupService.restoreBackup(chosen.id,
           keepSyncPartners: keep, password: password),
     );
   }
 
   Future<void> _restoreFromFile() => _restore(
-        'fișierul pe care îl vei alege',
+        tr('fișierul pe care îl vei alege', 'the file you choose'),
         (keep, password) => password == null
             ? BackupService.pickAndRestoreBackup(keepSyncPartners: keep)
             : BackupService.retryPickedRestore(
@@ -292,24 +299,24 @@ class _BackupScreenState extends State<BackupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Backup & restaurare'),
+        title: Text(tr('Backup & restaurare', 'Backup & restore')),
         backgroundColor: _indigo,
         foregroundColor: Colors.white,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Destinație backup',
+          Text(tr('Destinație backup', 'Backup destination'),
               style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           SegmentedButton<String>(
-            segments: const [
+            segments: [
               ButtonSegment(
-                  value: 'usb', icon: Icon(Icons.usb), label: Text('Stick USB')),
+                  value: 'usb', icon: Icon(Icons.usb), label: Text(tr('Stick USB', 'USB stick'))),
               ButtonSegment(
                   value: 'phone',
                   icon: Icon(Icons.phone_android),
-                  label: Text('Memoria telefonului')),
+                  label: Text(tr('Memoria telefonului', 'Phone storage'))),
             ],
             emptySelectionAllowed: true,
             selected: {if (s.destination != null) s.destination!},
@@ -327,18 +334,18 @@ class _BackupScreenState extends State<BackupScreen> {
                 color: folderOk ? _indigo : Colors.orange.shade800,
               ),
               title: Text(!s.hasFolder
-                  ? 'Niciun folder ales'
+                  ? tr('Niciun folder ales', 'No folder chosen')
                   : folderOk
                       ? s.folderName!
-                      : 'Folderul nu este accesibil'),
+                      : tr('Folderul nu este accesibil', 'The folder is not accessible')),
               subtitle: Text(!s.hasFolder
-                  ? 'Alege destinația de mai sus.'
+                  ? tr('Alege destinația de mai sus.', 'Choose the destination above.')
                   : folderOk
-                      ? 'Backup automat zilnic, în jurul orei 00:00.'
-                      : 'Conectează stick-ul sau alege din nou folderul.'),
+                      ? tr('Backup automat zilnic, în jurul orei 00:00.', 'Automatic daily backup, around 00:00.')
+                      : tr('Conectează stick-ul sau alege din nou folderul.', 'Connect the stick or choose the folder again.')),
               trailing: s.hasFolder
                   ? IconButton(
-                      tooltip: 'Schimbă folderul',
+                      tooltip: tr('Schimbă folderul', 'Change folder'),
                       icon: const Icon(Icons.edit_outlined),
                       onPressed: _busy
                           ? null
@@ -357,13 +364,13 @@ class _BackupScreenState extends State<BackupScreen> {
                   color: s.lastAutoError != null ? Colors.red.shade700 : null,
                 ),
                 title: Text(s.lastAutoAt != null
-                    ? 'Ultimul backup automat: ${_formatDate(s.lastAutoAt!)}'
-                    : 'Niciun backup automat încă'),
+                    ? tr('Ultimul backup automat: ${_formatDate(s.lastAutoAt!)}', 'Last automatic backup: ${_formatDate(s.lastAutoAt!)}')
+                    : tr('Niciun backup automat încă', 'No automatic backup yet')),
                 subtitle: s.lastAutoError != null
-                    ? Text('Ultima încercare a eșuat: ${s.lastAutoError}',
+                    ? Text(tr('Ultima încercare a eșuat: ${s.lastAutoError}', 'The last attempt failed: ${s.lastAutoError}'),
                         style: TextStyle(color: Colors.red.shade700))
                     : s.lastManualAt != null
-                        ? Text('Ultimul backup manual: ${_formatDate(s.lastManualAt!)}')
+                        ? Text(tr('Ultimul backup manual: ${_formatDate(s.lastManualAt!)}', 'Last manual backup: ${_formatDate(s.lastManualAt!)}'))
                         : null,
               ),
             ),
@@ -375,33 +382,33 @@ class _BackupScreenState extends State<BackupScreen> {
                 color: s.hasPassword ? _indigo : Colors.orange.shade800,
               ),
               title: Text(s.hasPassword
-                  ? 'Backup-urile sunt criptate cu parolă'
-                  : 'Parola de backup nu e setată'),
+                  ? tr('Backup-urile sunt criptate cu parolă', 'Backups are encrypted with a password')
+                  : tr('Parola de backup nu e setată', 'The backup password is not set')),
               subtitle: Text(s.hasPassword
-                  ? 'Parola se cere la restaurarea pe alt telefon.'
-                  : 'Fără parolă nu se face niciun backup (nici automat).'),
+                  ? tr('Parola se cere la restaurarea pe alt telefon.', 'The password is required when restoring on another phone.')
+                  : tr('Fără parolă nu se face niciun backup (nici automat).', 'Without a password no backup is made (not even automatic ones).')),
               trailing: TextButton(
                 onPressed: _busy ? null : _setPassword,
-                child: Text(s.hasPassword ? 'Schimbă' : 'Setează'),
+                child: Text(s.hasPassword ? tr('Schimbă', 'Change') : tr('Setează', 'Set')),
               ),
             ),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.backup),
-            label: const Text('Creează backup acum'),
+            label: Text(tr('Creează backup acum', 'Create backup now')),
             onPressed: _busy || !folderOk || !s.hasPassword ? null : _create,
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             icon: const Icon(Icons.restore),
-            label: const Text('Restaurează din folderul de backup'),
+            label: Text(tr('Restaurează din folderul de backup', 'Restore from the backup folder')),
             onPressed: _busy || !folderOk ? null : _restoreFromFolder,
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             icon: const Icon(Icons.file_open_outlined),
-            label: const Text('Restaurează din alt fișier'),
+            label: Text(tr('Restaurează din alt fișier', 'Restore from another file')),
             onPressed: _busy ? null : _restoreFromFile,
           ),
           if (_busy) ...[
@@ -431,13 +438,20 @@ class _BackupScreenState extends State<BackupScreen> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Backup-ul conține toate tabelele, setările și codul de '
+                tr('Backup-ul conține toate tabelele, setările și codul de '
                 'instalare împreună cu licența — după restaurare pe un telefon '
                 'nou, licența funcționează în continuare.\n\n'
                 'Fișierele sunt criptate (AES-256): fără parolă, datele '
                 'clienților nu pot fi citite de pe stick sau din telefon.\n\n'
                 'Se păstrează ultimele 14 backup-uri automate; cele manuale '
                 'nu se șterg niciodată automat.',
+                'The backup contains all tables, settings and the installation '
+                'code together with the license — after restoring on a new '
+                'phone, the license keeps working.\n\n'
+                'The files are encrypted (AES-256): without the password, client '
+                'data cannot be read from the stick or the phone.\n\n'
+                'The last 14 automatic backups are kept; manual ones '
+                'are never deleted automatically.'),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),

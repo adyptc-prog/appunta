@@ -37,7 +37,7 @@ object SmsSender {
             } else {
                 @Suppress("DEPRECATION")
                 SmsManager.getDefault()
-            } ?: throw IllegalStateException("Serviciul SMS nu este disponibil pe acest telefon.")
+            } ?: throw IllegalStateException(tr("Serviciul SMS nu este disponibil pe acest telefon.", "The SMS service is not available on this phone."))
 
             val parts = smsManager.divideMessage(message)
             val sentIntents = ArrayList<PendingIntent>(parts.size)

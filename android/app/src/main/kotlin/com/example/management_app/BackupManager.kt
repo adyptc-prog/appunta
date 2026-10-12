@@ -65,9 +65,9 @@ object BackupManager {
 
     private fun requireFolder(context: Context): Uri {
         val treeUri = folderUri(context)
-            ?: throw IllegalStateException("Nu a fost ales un folder pentru backup.")
+            ?: throw IllegalStateException(tr("Nu a fost ales un folder pentru backup.", "No backup folder has been chosen."))
         if (!hasWriteAccess(context, treeUri)) {
-            throw IllegalStateException("Aplicația nu mai are acces la folderul de backup. Alege-l din nou.")
+            throw IllegalStateException(tr("Aplicația nu mai are acces la folderul de backup. Alege-l din nou.", "The app no longer has access to the backup folder. Choose it again."))
         }
         return treeUri
     }
@@ -105,7 +105,7 @@ object BackupManager {
     fun createBackup(context: Context, auto: Boolean): HashMap<String, Any?> {
         val treeUri = requireFolder(context)
         val password = BackupPassword.get(context)
-            ?: throw IllegalStateException("Setează mai întâi parola de backup.")
+            ?: throw IllegalStateException(tr("Setează mai întâi parola de backup.", "Set the backup password first."))
         val now = System.currentTimeMillis()
         // Fișierul pleacă pe stick / în Documents — criptat (BackupCrypto).
         val content = BackupCrypto.encrypt(snapshot(context, now), password, now)
@@ -116,10 +116,10 @@ object BackupManager {
 
         val docUri = DocumentsContract.createDocument(
             context.contentResolver, folderDocumentUri(treeUri), "application/octet-stream", name,
-        ) ?: throw IllegalStateException("Nu s-a putut crea fișierul de backup.")
+        ) ?: throw IllegalStateException(tr("Nu s-a putut crea fișierul de backup.", "The backup file could not be created."))
         try {
             context.contentResolver.openOutputStream(docUri, "w")?.use { it.write(content) }
-                ?: throw IllegalStateException("Nu s-a putut scrie fișierul de backup.")
+                ?: throw IllegalStateException(tr("Nu s-a putut scrie fișierul de backup.", "The backup file could not be written."))
         } catch (e: Exception) {
             // Nu lăsăm în urmă un fișier gol/trunchiat care ar apărea în listă.
             try { DocumentsContract.deleteDocument(context.contentResolver, docUri) } catch (_: Exception) {}
@@ -197,7 +197,7 @@ object BackupManager {
     // ── Restore ──────────────────────────────────────────────────────────────────
     private fun readText(context: Context, uri: Uri): String =
         context.contentResolver.openInputStream(uri)?.use { it.reader(Charsets.UTF_8).readText() }
-            ?: throw IllegalStateException("Nu s-a putut citi fișierul de backup.")
+            ?: throw IllegalStateException(tr("Nu s-a putut citi fișierul de backup.", "The backup file could not be read."))
 
     fun restoreFromDocumentId(
         context: Context, documentId: String, keepSyncPartners: Boolean, password: String? = null,
@@ -230,8 +230,8 @@ object BackupManager {
             } catch (_: BackupCrypto.WrongPasswordException) {
             }
         }
-        if (password != null) throw PasswordException(PASSWORD_WRONG, "Parola backup-ului este greșită.")
-        throw PasswordException(PASSWORD_REQUIRED, "Backup-ul este criptat — introdu parola lui.")
+        if (password != null) throw PasswordException(PASSWORD_WRONG, tr("Parola backup-ului este greșită.", "The backup password is wrong."))
+        throw PasswordException(PASSWORD_REQUIRED, tr("Backup-ul este criptat — introdu parola lui.", "The backup is encrypted — enter its password."))
     }
 
     /**
@@ -271,7 +271,7 @@ object BackupManager {
                 is Set<*> -> editor.putStringSet(key, value as Set<String>)
             }
         }
-        if (!editor.commit()) throw IllegalStateException("Nu s-au putut salva datele restaurate.")
+        if (!editor.commit()) throw IllegalStateException(tr("Nu s-au putut salva datele restaurate.", "The restored data could not be saved."))
 
         LicenseStore.restoreIdentity(context, backup.identity)
 

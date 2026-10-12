@@ -71,16 +71,18 @@ class ClientBookingReceiver : BroadcastReceiver() {
         private val DISPLAY_DATE_FMT: DateTimeFormatter  = DateTimeFormatter.ofPattern("dd.MM")
 
         // Categoria poate avea mai multe cuvinte (ex. „liber gene false”).
-        private val LIBER_RE   = Regex("^liber(\\s+(.+))?$")
+        // Cuvintele-cheie sunt acceptate mereu în ambele limbi (liber/free,
+        // anuleaza/cancel); răspunsul pleacă în limba aleasă în aplicație.
+        private val LIBER_RE   = Regex("^(?:liber|free)(\\s+(.+))?$")
         private val NUMBER_RE  = Regex("^(\\d{1,2})$")
         // "anuleaza" / "anulare", eventual urmat de orice alt text (ex. "anuleaza
         // aceasta programare") — normalize() scoate deja diacriticele, deci
         // "anulează" ajunge tot aici.
-        private val CANCEL_RE  = Regex("^(anuleaza|anulare)(\\s+.*)?$")
+        private val CANCEL_RE  = Regex("^(anuleaza|anulare|cancel)(\\s+.*)?$")
         // Cât timp clientul are o listă activă, acceptăm și forme ca „3.”,
         // „3)”, „nr 3”, „opțiunea 3”, „ora 3” (diacriticele sunt deja scoase).
         private val LOOSE_NUMBER_RE =
-            Regex("^(?:(?:optiunea|optiune|varianta|numarul|numar|nr|ora)\\.?\\s*)?(\\d{1,2})\\s*[.)!]*$")
+            Regex("^(?:(?:optiunea|optiune|varianta|numarul|numar|nr|ora|option|number|no)\\.?\\s*)?(\\d{1,2})\\s*[.)!]*$")
         // Un text scurt, nerecunoscut, primit în timpul unei liste active
         // primește o singură dată un mesaj de ajutor; unul lung e probabil
         // un SMS personal și rămâne fără răspuns.
@@ -130,6 +132,8 @@ class ClientBookingReceiver : BroadcastReceiver() {
     // internal: apelat direct de testele Robolectric (fără SMS-uri reale).
     internal fun handleMessage(context: Context, sender: String, rawBody: String) {
         Diag.i("handleMessage sender=${Diag.mask(sender)} len=${rawBody.length}")
+        // Răspunsurile pleacă în limba aleasă în aplicație pe acest telefon.
+        AppLang.sync(context)
         // Mesaje de sincronizare — ale acestei aplicații (ORG:) sau ale
         // aplicației „Rezervări Pensiune” (PEN:), dacă e pe același telefon.
         if (rawBody.startsWith("ORG:") || rawBody.startsWith("PEN:")) {
@@ -208,24 +212,36 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 markHelped(context, SERVICE_OFFERS_KEY, senderDigits)
                 sendSms(
                     context, sender,
-                    "Nu am înțeles. Răspunde doar cu numărul serviciului dorit (ex. 1) " +
-                        "sau LIBER pentru o căutare nouă."
+                    tr(
+                        "Nu am înțeles. Răspunde doar cu numărul serviciului dorit (ex. 1) " +
+                            "sau LIBER pentru o căutare nouă.",
+                        "I didn't understand. Reply with just the number of the service you want (e.g. 1) " +
+                            "or FREE for a new search.",
+                    )
                 )
             }
             helpFor == "booking" -> {
                 markHelped(context, OFFERS_KEY, senderDigits)
                 sendSms(
                     context, sender,
-                    "Nu am înțeles. Răspunde doar cu numărul orei dorite (ex. 2), " +
-                        "NEXT pentru alte ore sau LIBER pentru o căutare nouă."
+                    tr(
+                        "Nu am înțeles. Răspunde doar cu numărul orei dorite (ex. 2), " +
+                            "NEXT pentru alte ore sau LIBER pentru o căutare nouă.",
+                        "I didn't understand. Reply with just the number of the time you want (e.g. 2), " +
+                            "NEXT for other times or FREE for a new search.",
+                    )
                 )
             }
             helpFor == "cancel" -> {
                 markHelped(context, CANCEL_OFFERS_KEY, senderDigits)
                 sendSms(
                     context, sender,
-                    "Nu am înțeles. Răspunde doar cu numărul programării pe care vrei " +
-                        "să o anulezi (ex. 1)."
+                    tr(
+                        "Nu am înțeles. Răspunde doar cu numărul programării pe care vrei " +
+                            "să o anulezi (ex. 1).",
+                        "I didn't understand. Reply with just the number of the appointment you want " +
+                            "to cancel (e.g. 1).",
+                    )
                 )
             }
             liberMatch != null -> {
@@ -264,7 +280,10 @@ class ClientBookingReceiver : BroadcastReceiver() {
             .atZone(java.time.ZoneId.systemDefault()).toLocalTime()
         sendSms(
             context, sender,
-            "Ai trimis multe mesaje într-un timp scurt. Poți reveni după ora ${until.format(TIME_FMT)}."
+            tr(
+                "Ai trimis multe mesaje într-un timp scurt. Poți reveni după ora ${until.format(TIME_FMT)}.",
+                "You sent many messages in a short time. You can try again after ${until.format(TIME_FMT)}.",
+            )
         )
     }
 
@@ -301,8 +320,12 @@ class ClientBookingReceiver : BroadcastReceiver() {
         if (BotLimits.canBookMore(findActiveBookings(context, senderDigits).size)) return false
         sendSms(
             context, sender,
-            "Ai deja ${BotLimits.MAX_ACTIVE_BOOKINGS_PER_NUMBER} rezervări active. " +
-                "Pentru una nouă, anulează mai întâi una scriind ANULEAZA."
+            tr(
+                "Ai deja ${BotLimits.MAX_ACTIVE_BOOKINGS_PER_NUMBER} rezervări active. " +
+                    "Pentru una nouă, anulează mai întâi una scriind ANULEAZA.",
+                "You already have ${BotLimits.MAX_ACTIVE_BOOKINGS_PER_NUMBER} active appointments. " +
+                    "For a new one, first cancel one by texting CANCEL.",
+            )
         )
         return true
     }
@@ -467,7 +490,10 @@ class ClientBookingReceiver : BroadcastReceiver() {
         val board = if (token == null) {
             when (enabled.size) {
                 0 -> {
-                    sendSms(context, sender, "Rezervările prin SMS nu sunt active momentan.")
+                    sendSms(
+                        context, sender,
+                        tr("Rezervările prin SMS nu sunt active momentan.", "SMS bookings are not active at the moment."),
+                    )
                     return
                 }
                 1 -> enabled[0]
@@ -475,10 +501,14 @@ class ClientBookingReceiver : BroadcastReceiver() {
                     // Categoriile cu rezervări active sunt publice (le alege clientul).
                     clearServiceOffer(context, senderDigits)
                     clearOffer(context, senderDigits)
-                    val lines = enabled.map { "LIBER ${commandName(it)}" }
+                    val keyword = tr("LIBER", "FREE")
+                    val lines = enabled.map { "$keyword ${commandName(it)}" }
                     sendSms(
                         context, sender,
-                        "Pentru ce categorie dorești programare? Scrie:\n${lines.joinToString("\n")}"
+                        tr(
+                            "Pentru ce categorie dorești programare? Scrie:",
+                            "Which category do you want an appointment for? Text:",
+                        ) + "\n${lines.joinToString("\n")}"
                     )
                     return
                 }
@@ -488,7 +518,10 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 // Nu repetăm aici numele tabelelor — lista e la „LIBER”.
                 sendSms(
                     context, sender,
-                    "Nu am găsit categoria \"$token\". Scrie LIBER pentru lista categoriilor."
+                    tr(
+                        "Nu am găsit categoria \"$token\". Scrie LIBER pentru lista categoriilor.",
+                        "I couldn't find the category \"$token\". Text FREE for the list of categories.",
+                    )
                 )
                 return
             }
@@ -497,7 +530,13 @@ class ClientBookingReceiver : BroadcastReceiver() {
         val settings = BookingSettings.loadSettings(context, board.id)
         Diag.i("startOffer: board=${board.id} settings.enabled=${settings.enabled}")
         if (!settings.enabled) {
-            sendSms(context, sender, "Rezervările prin SMS nu sunt active pentru ${board.name}.")
+            sendSms(
+                context, sender,
+                tr(
+                    "Rezervările prin SMS nu sunt active pentru ${board.name}.",
+                    "SMS bookings are not active for ${board.name}.",
+                ),
+            )
             return
         }
 
@@ -514,8 +553,9 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 val lines = services.mapIndexed { i, s -> "${i + 1}. ${s.name} (${formatDuration(s.durationMin)})" }
                 sendSms(
                     context, sender,
-                    "Servicii ${board.name}:\n${lines.joinToString("\n")}\n" +
-                        "Răspunde cu numărul serviciului dorit."
+                    tr("Servicii ${board.name}:", "Services, ${board.name}:") +
+                        "\n${lines.joinToString("\n")}\n" +
+                        tr("Răspunde cu numărul serviciului dorit.", "Reply with the number of the service you want.")
                 )
             }
         }
@@ -525,15 +565,19 @@ class ClientBookingReceiver : BroadcastReceiver() {
     private fun confirmService(context: Context, sender: String, senderDigits: String, choice: Int) {
         val offer = getServiceOffer(context, senderDigits)
         if (offer == null) {
-            sendSms(context, sender, "Nu am nicio căutare activă. Scrie LIBER pentru a vedea orele libere.")
+            sendSms(context, sender, noActiveSearch())
             return
         }
         val services = ServicesStore.decode(offer.optJSONArray("services"))
         if (choice < 1 || choice > services.size) {
             sendSms(
                 context, sender,
-                "Opțiune invalidă. Răspunde cu numărul unui serviciu din ultimul mesaj primit, " +
-                    "sau scrie LIBER pentru o căutare nouă."
+                tr(
+                    "Opțiune invalidă. Răspunde cu numărul unui serviciu din ultimul mesaj primit, " +
+                        "sau scrie LIBER pentru o căutare nouă.",
+                    "Invalid option. Reply with the number of a service from the last message you received, " +
+                        "or text FREE for a new search.",
+                )
             )
             return
         }
@@ -569,7 +613,7 @@ class ClientBookingReceiver : BroadcastReceiver() {
     private fun continueOffer(context: Context, sender: String, senderDigits: String) {
         val offer = getOffer(context, senderDigits)
         if (offer == null) {
-            sendSms(context, sender, "Nu am nicio căutare activă. Scrie LIBER pentru a vedea orele libere.")
+            sendSms(context, sender, noActiveSearch())
             return
         }
         val boardId = offer.optString("board", "")
@@ -608,9 +652,15 @@ class ClientBookingReceiver : BroadcastReceiver() {
 
         if (page.slots.isEmpty()) {
             val msg = if (isFirstPage) {
-                "Nu sunt ore libere în perioada verificată pentru ${title(board, service)}."
+                tr(
+                    "Nu sunt ore libere în perioada verificată pentru ${title(board, service)}.",
+                    "There are no free times in the period checked for ${title(board, service)}.",
+                )
             } else {
-                "Nu mai sunt alte ore libere pentru ${title(board, service)}. Scrie LIBER pentru a relua căutarea."
+                tr(
+                    "Nu mai sunt alte ore libere pentru ${title(board, service)}. Scrie LIBER pentru a relua căutarea.",
+                    "There are no more free times for ${title(board, service)}. Text FREE to search again.",
+                )
             }
             sendSms(context, sender, msg)
             clearOffer(context, senderDigits)
@@ -624,9 +674,16 @@ class ClientBookingReceiver : BroadcastReceiver() {
             val dateSuffix = if (slot.start.toLocalDate() != today) " (${slot.start.format(DISPLAY_DATE_FMT)})" else ""
             "${i + 1}. ${slot.start.format(DISPLAY_TIME_FMT)}-${slot.end.format(DISPLAY_TIME_FMT)}$dateSuffix"
         }
-        val footer = "Răspunde cu numărul opțiunii pentru rezervare" + (if (page.hasMore) ", sau NEXT pentru alte ore." else ".")
-        sendSms(context, sender, "Ore libere ${title(board, service)}:\n${lines.joinToString("\n")}\n$footer")
+        val footer = tr("Răspunde cu numărul opțiunii pentru rezervare", "Reply with the option number to book") +
+            (if (page.hasMore) tr(", sau NEXT pentru alte ore.", ", or NEXT for other times.") else ".")
+        val header = tr("Ore libere ${title(board, service)}:", "Free times, ${title(board, service)}:")
+        sendSms(context, sender, "$header\n${lines.joinToString("\n")}\n$footer")
     }
+
+    private fun noActiveSearch(): String = tr(
+        "Nu am nicio căutare activă. Scrie LIBER pentru a vedea orele libere.",
+        "I have no active search. Text FREE to see the free times.",
+    )
 
     private class Page(val slots: List<FreeSlot>, val hasMore: Boolean)
 
@@ -656,7 +713,7 @@ class ClientBookingReceiver : BroadcastReceiver() {
         if (minutes < 60) return "$minutes min"
         val h = minutes / 60
         val m = minutes % 60
-        if (m == 0) return "$h ${if (h == 1) "oră" else "ore"}"
+        if (m == 0) return "$h ${if (h == 1) tr("oră", "hour") else tr("ore", "hours")}"
         return "${h}h ${m}min"
     }
 
@@ -664,7 +721,13 @@ class ClientBookingReceiver : BroadcastReceiver() {
     private fun confirmOffer(context: Context, sender: String, senderDigits: String, choice: Int) {
         val offer = getOffer(context, senderDigits)
         if (offer == null) {
-            sendSms(context, sender, "Nu am nicio ofertă activă pentru tine. Scrie LIBER pentru a vedea orele libere.")
+            sendSms(
+                context, sender,
+                tr(
+                    "Nu am nicio ofertă activă pentru tine. Scrie LIBER pentru a vedea orele libere.",
+                    "I have no active offer for you. Text FREE to see the free times.",
+                ),
+            )
             return
         }
         val boardId = offer.optString("board", "")
@@ -689,8 +752,12 @@ class ClientBookingReceiver : BroadcastReceiver() {
         if (choice < 1 || choice > page.slots.size) {
             sendSms(
                 context, sender,
-                "Opțiune invalidă sau expirată. Răspunde cu un număr din ultimul mesaj primit, " +
-                    "sau scrie LIBER pentru o căutare nouă."
+                tr(
+                    "Opțiune invalidă sau expirată. Răspunde cu un număr din ultimul mesaj primit, " +
+                        "sau scrie LIBER pentru o căutare nouă.",
+                    "Invalid or expired option. Reply with a number from the last message you received, " +
+                        "or text FREE for a new search.",
+                )
             )
             return
         }
@@ -703,9 +770,12 @@ class ClientBookingReceiver : BroadcastReceiver() {
             " (${slot.start.format(DISPLAY_DATE_FMT)})" else ""
         sendSms(
             context, sender,
-            "Programarea ta la ${title(board, service)} pe ${slot.start.format(DISPLAY_TIME_FMT)}-" +
-                "${slot.end.format(DISPLAY_TIME_FMT)}$dateSuffix a fost înregistrată. Te așteptăm!" +
-                noShowWarning(context, sender)
+            tr(
+                "Programarea ta la ${title(board, service)} pe ${slot.start.format(DISPLAY_TIME_FMT)}-" +
+                    "${slot.end.format(DISPLAY_TIME_FMT)}$dateSuffix a fost înregistrată. Te așteptăm!",
+                "Your appointment at ${title(board, service)}, ${slot.start.format(DISPLAY_TIME_FMT)}-" +
+                    "${slot.end.format(DISPLAY_TIME_FMT)}$dateSuffix, has been booked. See you then!",
+            ) + noShowWarning(context, sender)
         )
     }
 
@@ -730,8 +800,12 @@ class ClientBookingReceiver : BroadcastReceiver() {
         prefs.edit().putString(BLOCK_NOTICE_KEY, notices.toString()).apply()
         sendSms(
             context, sender,
-            "Nu mai poți face programări prin SMS din cauza neprezentărilor repetate. " +
-                "Te rugăm să suni la salon."
+            tr(
+                "Nu mai poți face programări prin SMS din cauza neprezentărilor repetate. " +
+                    "Te rugăm să suni la salon.",
+                "You can no longer book by SMS because of repeated no-shows. " +
+                    "Please call us.",
+            )
         )
         return true
     }
@@ -741,8 +815,12 @@ class ClientBookingReceiver : BroadcastReceiver() {
         val threshold = NoShowStore.threshold(context)
         val count = NoShowStore.countFor(context, sender)
         if (threshold <= 0 || count <= 0 || count != threshold - 1) return ""
-        return "\nAtenție: ai $count ${if (count == 1) "neprezentare" else "neprezentări"}. " +
-            "La $threshold nu mai poți rezerva prin SMS."
+        return tr(
+            "\nAtenție: ai $count ${if (count == 1) "neprezentare" else "neprezentări"}. " +
+                "La $threshold nu mai poți rezerva prin SMS.",
+            "\nNote: you have $count ${if (count == 1) "no-show" else "no-shows"}. " +
+                "At $threshold you can no longer book by SMS.",
+        )
     }
 
     // ── Flux „anuleaza” / „anulare” ─────────────────────────────────────────────
@@ -796,7 +874,13 @@ class ClientBookingReceiver : BroadcastReceiver() {
         val candidates = findActiveBookings(context, senderDigits)
         when {
             candidates.isEmpty() ->
-                sendSms(context, sender, "Nu am găsit nicio programare activă pe acest număr.")
+                sendSms(
+                    context, sender,
+                    tr(
+                        "Nu am găsit nicio programare activă pe acest număr.",
+                        "I found no active appointment for this number.",
+                    ),
+                )
             candidates.size == 1 -> {
                 clearCancelOffer(context, senderDigits)
                 cancelBooking(context, sender, candidates[0])
@@ -814,8 +898,12 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 val lines = candidates.mapIndexed { i, c -> "${i + 1}. ${c.label}" }
                 sendSms(
                     context, sender,
-                    "Ai mai multe programări active:\n${lines.joinToString("\n")}\n" +
-                        "Răspunde cu numărul celei pe care vrei să o anulezi."
+                    tr("Ai mai multe programări active:", "You have several active appointments:") +
+                        "\n${lines.joinToString("\n")}\n" +
+                        tr(
+                            "Răspunde cu numărul celei pe care vrei să o anulezi.",
+                            "Reply with the number of the one you want to cancel.",
+                        )
                 )
             }
         }
@@ -824,15 +912,25 @@ class ClientBookingReceiver : BroadcastReceiver() {
     private fun confirmCancel(context: Context, sender: String, senderDigits: String, choice: Int) {
         val offer = getCancelOffer(context, senderDigits)
         if (offer == null) {
-            sendSms(context, sender, "Nu am nicio cerere de anulare activă. Scrie ANULEAZA pentru a o relua.")
+            sendSms(
+                context, sender,
+                tr(
+                    "Nu am nicio cerere de anulare activă. Scrie ANULEAZA pentru a o relua.",
+                    "I have no active cancellation request. Text CANCEL to start again.",
+                ),
+            )
             return
         }
         val candidates = offer.optJSONArray("candidates") ?: JSONArray()
         if (choice < 1 || choice > candidates.length()) {
             sendSms(
                 context, sender,
-                "Opțiune invalidă sau expirată. Răspunde cu un număr din ultimul mesaj primit, " +
-                    "sau scrie ANULEAZA pentru o căutare nouă."
+                tr(
+                    "Opțiune invalidă sau expirată. Răspunde cu un număr din ultimul mesaj primit, " +
+                        "sau scrie ANULEAZA pentru o căutare nouă.",
+                    "Invalid or expired option. Reply with a number from the last message you received, " +
+                        "or text CANCEL for a new search.",
+                )
             )
             return
         }
@@ -855,7 +953,13 @@ class ClientBookingReceiver : BroadcastReceiver() {
     private fun cancelBooking(context: Context, sender: String, candidate: CancelCandidate) {
         enqueueSyncMessage(context, candidate.boardId, "ORG:D:${candidate.syncId}")
         BotReminders.cancel(context, candidate.syncId)
-        sendSms(context, sender, "Programarea ta ${candidate.label} a fost anulată.")
+        sendSms(
+            context, sender,
+            tr(
+                "Programarea ta ${candidate.label} a fost anulată.",
+                "Your appointment ${candidate.label} has been cancelled.",
+            ),
+        )
     }
 
     private fun generateSyncId(): String {

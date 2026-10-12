@@ -39,7 +39,7 @@ object BackupCrypto {
     private val AAD = "organizator-backup-v2".toByteArray(Charsets.UTF_8)
 
     class WrongPasswordException :
-        Exception("Parolă greșită sau fișier modificat.")
+        Exception(tr("Parolă greșită sau fișier modificat.", "Wrong password or modified file."))
 
     fun isValidPassword(password: String?): Boolean =
         password != null && password.length >= MIN_PASSWORD_LENGTH
@@ -57,7 +57,12 @@ object BackupCrypto {
         iterations: Int = DEFAULT_ITERATIONS,
         random: SecureRandom = SecureRandom(),
     ): String {
-        require(isValidPassword(password)) { "Parola trebuie să aibă minim $MIN_PASSWORD_LENGTH caractere." }
+        require(isValidPassword(password)) {
+            tr(
+                "Parola trebuie să aibă minim $MIN_PASSWORD_LENGTH caractere.",
+                "The password must have at least $MIN_PASSWORD_LENGTH characters.",
+            )
+        }
         val salt = ByteArray(SALT_BYTES).also(random::nextBytes)
         val iv = ByteArray(IV_BYTES).also(random::nextBytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -85,7 +90,7 @@ object BackupCrypto {
 
     /** Textul backup-ului v1 din interior; [WrongPasswordException] la parolă greșită. */
     fun decrypt(content: String, password: String): String {
-        val invalid = BackupFormat.InvalidBackupException("Fișierul nu este un backup Organizator valid.")
+        val invalid = BackupFormat.InvalidBackupException(tr("Fișierul nu este un backup Organizator valid.", "The file is not a valid Organizator backup."))
         val root = try { JSONObject(content) } catch (_: Exception) { throw invalid }
         if (root.optString("app") != BackupFormat.APP_ID ||
             root.optInt("formatVersion", -1) != FORMAT_VERSION

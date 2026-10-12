@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'license_service.dart';
+import 'l10n.dart';
 
 // ─── Ecran licență ────────────────────────────────────────────────────────────
 // Status, cod de instalare, import fișier și transmiterea licenței către
@@ -59,7 +60,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
         if (!mounted) return;
         if (!r.success && r.message.isEmpty) return; // selector anulat
         if (r.success) {
-          _snack('Licență activată cu succes!', color: Colors.green.shade700);
+          _snack(tr('Licență activată cu succes!', 'License activated successfully!'), color: Colors.green.shade700);
           await widget.onShareWithPartners?.call();
         } else {
           _snack(r.message, color: Colors.red.shade700);
@@ -70,20 +71,27 @@ class _LicenseScreenState extends State<LicenseScreen> {
         final r = await widget.onShareWithPartners!.call();
         if (!mounted || r == null) return; // SMS blocat — explicat deja
         if (r.sent > 0) {
-          _snack('Licența a fost trimisă prin SMS la ${r.sent} '
-              '${r.sent == 1 ? 'telefon' : 'telefoane'}.');
+          _snack(tr('Licența a fost trimisă prin SMS la ${r.sent} '
+              '${r.sent == 1 ? 'telefon' : 'telefoane'}.',
+          'The license was sent by SMS to ${r.sent} '
+          '${r.sent == 1 ? 'phone' : 'phones'}.'));
         } else if (r.refused == 'other_partner') {
           _snack(
-              'Licența e deja folosită pe al doilea telefon '
+              tr('Licența e deja folosită pe al doilea telefon '
               '(${_shareInfo.sharedWith ?? 'partenerul inițial'}) și nu poate fi '
               'trimisă la alt număr.',
+              'The license is already used on the second phone '
+              '(${_shareInfo.sharedWith ?? 'the initial partner'}) and cannot be '
+              'sent to another number.'),
               color: Colors.orange.shade800);
         } else if (r.refused == 'not_owner') {
-          _snack('Licența a fost primită de la telefonul partener și nu poate '
+          _snack(tr('Licența a fost primită de la telefonul partener și nu poate '
               'fi trimisă mai departe.',
+          'The license was received from the partner phone and cannot '
+          'be passed on.'),
               color: Colors.orange.shade800);
         } else {
-          _snack('Niciun telefon partener configurat pentru sincronizare.');
+          _snack(tr('Niciun telefon partener configurat pentru sincronizare.', 'No partner phone is set up for sync.'));
         }
         _shareInfo = await LicenseService.getShareInfo();
       });
@@ -99,8 +107,8 @@ class _LicenseScreenState extends State<LicenseScreen> {
         return (
           icon: Icons.verified_user,
           color: Colors.green.shade700,
-          title: 'Licență pe viață activă',
-          subtitle: 'Nu expiră.',
+          title: tr('Licență pe viață activă', 'Lifetime license active'),
+          subtitle: tr('Nu expiră.', 'It does not expire.'),
         );
       }
       return (
@@ -111,32 +119,34 @@ class _LicenseScreenState extends State<LicenseScreen> {
             ? Colors.orange.shade800
             : Colors.green.shade700,
         title: LicenseService.isExpiringSoon
-            ? 'Licența expiră în curând'
-            : 'Licență activă',
+            ? tr('Licența expiră în curând', 'The license expires soon')
+            : tr('Licență activă', 'License active'),
         subtitle: [
-          if (until != null) 'Valabilă până la ${_formatDate(until)}',
-          if (days != null) '$days zile rămase',
+          if (until != null) tr('Valabilă până la ${_formatDate(until)}', 'Valid until ${_formatDate(until)}'),
+          if (days != null) tr('$days zile rămase', '$days ${days == 1 ? 'day' : 'days'} left'),
         ].join(' · '),
       );
     }
     final invalidNote = LicenseService.newLicenseStatus == 'invalid' &&
             LicenseService.newLicenseMessage.isNotEmpty
-        ? '\nLicență respinsă: ${LicenseService.newLicenseMessage}'
+        ? tr('\nLicență respinsă: ${LicenseService.newLicenseMessage}', '\nLicense rejected: ${LicenseService.newLicenseMessage}')
         : '';
     if (LicenseService.isTrialActive) {
       return (
         icon: Icons.lock_open_outlined,
         color: Colors.orange.shade800,
-        title: 'Perioadă de trial',
-        subtitle: '${LicenseService.trialDaysLeft} zile rămase$invalidNote',
+        title: tr('Perioadă de trial', 'Trial period'),
+        subtitle: tr('${LicenseService.trialDaysLeft} zile rămase$invalidNote', '${LicenseService.trialDaysLeft} days left$invalidNote'),
       );
     }
     return (
       icon: Icons.lock_outline,
       color: Colors.red.shade700,
-      title: 'Fără licență',
-      subtitle: 'Perioada de trial a expirat. Botul de rezervări și '
+      title: tr('Fără licență', 'No license'),
+      subtitle: tr('Perioada de trial a expirat. Botul de rezervări și '
           'reminderele SMS sunt oprite până la activarea licenței.$invalidNote',
+      'The trial period has expired. The booking bot and '
+      'SMS reminders are off until the license is activated.$invalidNote'),
     );
   }
 
@@ -150,7 +160,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Licență'),
+        title: Text(tr('Licență', 'License')),
         backgroundColor: _indigo,
         foregroundColor: Colors.white,
       ),
@@ -170,20 +180,20 @@ class _LicenseScreenState extends State<LicenseScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.qr_code_2),
-              title: const Text('Cod de instalare'),
+              title: Text(tr('Cod de instalare', 'Installation code')),
               subtitle: SelectableText(
                 _businessId,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.copy),
-                tooltip: 'Copiază codul',
+                tooltip: tr('Copiază codul', 'Copy code'),
                 onPressed: _businessId.isEmpty
                     ? null
                     : () async {
                         await Clipboard.setData(
                             ClipboardData(text: _businessId));
-                        if (mounted) _snack('Cod copiat.');
+                        if (mounted) _snack(tr('Cod copiat.', 'Code copied.'));
                       },
               ),
             ),
@@ -195,30 +205,30 @@ class _LicenseScreenState extends State<LicenseScreen> {
               child: ListTile(
                 leading: const Icon(Icons.phonelink_ring_outlined),
                 title: Text(_shareInfo.fromPartner
-                    ? 'Licență primită de la telefonul partener'
-                    : 'Folosită și pe telefonul ${_shareInfo.sharedWith}'),
-                subtitle: const Text(
-                    'O licență acoperă două telefoane sincronizate.'),
+                    ? tr('Licență primită de la telefonul partener', 'License received from the partner phone')
+                    : tr('Folosită și pe telefonul ${_shareInfo.sharedWith}', 'Also used on the phone ${_shareInfo.sharedWith}')),
+                subtitle: Text(
+                    tr('O licență acoperă două telefoane sincronizate.', 'One license covers two synced phones.')),
               ),
             ),
           ],
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.folder_open),
-            label: const Text('Selectează fișierul de licență'),
+            label: Text(tr('Selectează fișierul de licență', 'Select the license file')),
             onPressed: _busy ? null : _pick,
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             icon: const Icon(Icons.refresh),
-            label: const Text('Reverifică licența'),
+            label: Text(tr('Reverifică licența', 'Check the license again')),
             onPressed: _busy ? null : _refresh,
           ),
           if (canShare) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.send_to_mobile),
-              label: const Text('Trimite licența la telefonul partener'),
+              label: Text(tr('Trimite licența la telefonul partener', 'Send the license to the partner phone')),
               onPressed: _busy ? null : _share,
             ),
           ],
@@ -228,12 +238,18 @@ class _LicenseScreenState extends State<LicenseScreen> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Cumpără o licență pe voltacademy.app/organizator.html folosind '
+                tr('Cumpără o licență pe voltacademy.app/organizator.html folosind '
                 'codul de instalare de mai sus, apoi selectează fișierul '
                 'descărcat.\n\n'
                 'Licența e valabilă pe două telefoane: configurează '
                 'sincronizarea între ele și licența se transferă automat '
                 'prin SMS pe al doilea telefon.',
+                'Buy a license at voltacademy.app/organizator.html using '
+                'the installation code above, then select the downloaded '
+                'file.\n\n'
+                'The license is valid on two phones: set up '
+                'sync between them and the license is transferred automatically '
+                'by SMS to the second phone.'),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),

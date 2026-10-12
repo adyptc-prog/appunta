@@ -11,6 +11,8 @@
 
 import 'dart:convert';
 
+import 'l10n.dart';
+
 /// Cât timp contează o neprezentare.
 const kNoShowWindow = Duration(days: 180);
 
@@ -39,13 +41,13 @@ const kNoShowSmsSentKey = 'no_show_sms_sent';
 
 String noShowSmsText(DateTime at, int threshold, int count) {
   String two(int n) => n.toString().padLeft(2, '0');
-  final when = '${two(at.day)}.${two(at.month)}, ora ${two(at.hour)}:${two(at.minute)}';
-  final base = 'Nu te-ai prezentat la programarea din $when.';
+  final when = tr('${two(at.day)}.${two(at.month)}, ora ${two(at.hour)}:${two(at.minute)}', '${two(at.day)}.${two(at.month)} at ${two(at.hour)}:${two(at.minute)}');
+  final base = tr('Nu te-ai prezentat la programarea din $when.', 'You did not show up for your appointment on $when.');
   if (threshold <= 0) return base;
   if (count >= threshold) {
-    return '$base Nu mai poți face programări prin SMS; te rugăm să suni la salon.';
+    return tr('$base Nu mai poți face programări prin SMS; te rugăm să suni la salon.', '$base You can no longer book by SMS; please call us.');
   }
-  return '$base La $threshold neprezentări nu mai poți rezerva prin SMS.';
+  return tr('$base La $threshold neprezentări nu mai poți rezerva prin SMS.', '$base At $threshold no-shows you can no longer book by SMS.');
 }
 
 /// Ultimele 9 cifre ale telefonului; '' dacă are prea puține ca să fie sigur.

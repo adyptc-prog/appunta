@@ -44,7 +44,7 @@ object SyncAuth {
     }
 
     fun sign(code: String, message: String): String {
-        require(isValidCode(code)) { "Cod de împerechere invalid." }
+        require(isValidCode(code)) { tr("Cod de împerechere invalid.", "Invalid pairing code.") }
         return "$SIGNED_PREFIX${tag(code, message)}:$message"
     }
 
