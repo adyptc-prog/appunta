@@ -26,10 +26,10 @@ Salons, clinics and workshops use it for appointments booked by SMS.
 - **Records with expiry dates**, each with up to 3 phone numbers, organised in up to 10 tables
 - **Local alerts** before and at expiry
 - **SMS reminders** to clients, with an editable message template
-- **SMS self-booking per category and service:** a client sends `liber unghii`, picks a service
+- **SMS self-booking per category and service:** a client sends `liber unghii` (or `free unghii`), picks a service
   from the list, then a free slot. Each service has its own duration, and the free slots are
   computed from it.
-- **Cancellation by SMS**: the client sends `anuleaza`. This works for SMS bookings and for
+- **Cancellation by SMS**: the client sends `anuleaza` or `cancel`. This works for SMS bookings and for
   bookings added by hand.
 - **No-show tracking:** you confirm whether the client came after the appointment. No-shows show
   up as red dots next to the client, and from a threshold you choose, the bot stops accepting
@@ -39,6 +39,7 @@ Salons, clinics and workshops use it for appointments booked by SMS.
 - **Two-phone sync over SMS**, with messages signed by a pairing code entered on both phones
 - **Encrypted backup**, daily and manual, to phone storage or a USB stick
 - **Reports** for any period
+- **Romanian and English**, chosen from the globe icon in the app bar (on first launch: Romanian on a Romanian phone, English otherwise)
 - 30-day free trial, then an activation license (see [Free Trial & Activation License](#free-trial--activation-license))
 
 ---
@@ -54,6 +55,8 @@ Client replies with a number  →  booking saved in the table, reminder schedule
 The SMS bot runs natively on Android (a `BroadcastReceiver`), so it answers even when the
 app is closed. Sync messages between the two phones are authenticated with the pairing code,
 and the bot only answers phone numbers.
+The bot understands the Romanian and the English keywords alike (`liber` / `free`,
+`anuleaza` / `cancel`). It replies in the language set in the app on the phone that receives the SMS.
 
 ---
 
