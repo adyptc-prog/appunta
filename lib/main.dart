@@ -43,6 +43,12 @@ String _syncSecretKeyFor(String boardId)    => 'sync_secret_$boardId';
 // ── Chei pentru setările de rezervări prin SMS (per tabel) ────────────────────
 String _bookingEnabledKeyFor(String boardId)      => 'booking_enabled_$boardId';
 String _appointmentDurationKeyFor(String boardId) => 'appointment_duration_$boardId';
+// Programul pe zile: „1:540-1080,2:540-1080” (zi:deschidere-închidere, în
+// minute). Citit și nativ de BookingSettings.kt — formatul trebuie să rămână
+// identic.
+String _workHoursKeyFor(String boardId)           => 'work_hours_$boardId';
+// Chei vechi (un singur program pentru toate zilele + zile închise) — doar
+// citite, pentru tabelele salvate înainte de programul pe zile.
 String _workStartKeyFor(String boardId)           => 'work_start_$boardId';
 String _workEndKeyFor(String boardId)             => 'work_end_$boardId';
 String _closedDaysKeyFor(String boardId)          => 'closed_days_$boardId';
@@ -886,64 +892,111 @@ class Board {
 }
 
 // ─── Setări rezervări prin SMS (per tabel) ────────────────────────────────────
+/// Programul unei zile lucrătoare (minute de la miezul nopții).
+class DayHours {
+  final int startMin;
+  final int endMin;
+  const DayHours(this.startMin, this.endMin);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DayHours && other.startMin == startMin && other.endMin == endMin;
+
+  @override
+  int get hashCode => Object.hash(startMin, endMin);
+}
+
+const _kDefaultDayHours = DayHours(9 * 60, 18 * 60);
+
+/// „540” → „09:00”.
+String formatMinutesOfDay(int minutes) =>
+    '${(minutes ~/ 60).toString().padLeft(2, '0')}:'
+    '${(minutes % 60).toString().padLeft(2, '0')}';
+
+/// Programul pe zile ↔ textul salvat („1:540-1080,3:600-840”). Intrările
+/// invalide sunt sărite. Aceeași regulă ca parseWorkHours din BookingSettings.kt.
+String encodeWorkHours(Map<int, DayHours> hours) => (hours.keys.toList()..sort())
+    .map((d) => '$d:${hours[d]!.startMin}-${hours[d]!.endMin}')
+    .join(',');
+
+Map<int, DayHours> parseWorkHours(String raw) {
+  final result = <int, DayHours>{};
+  for (final part in raw.split(',')) {
+    final m = RegExp(r'^(\d+):(\d+)-(\d+)$').firstMatch(part.trim());
+    if (m == null) continue;
+    final day = int.parse(m[1]!);
+    final start = int.parse(m[2]!);
+    final end = int.parse(m[3]!);
+    if (day < 1 || day > 7 || end <= start || end > 24 * 60) continue;
+    result[day] = DayHours(start, end);
+  }
+  return result;
+}
+
 class BookingSettingsData {
   final bool enabled;
   final int  durationMin;
-  // Program de lucru (minute de la miezul nopții).
-  final int  workStartMin;
-  final int  workEndMin;
-  final Set<int> closedDays; // DateTime.weekday: 1=luni .. 7=duminică
+  // Programul de lucru pe zile (DateTime.weekday: 1=luni .. 7=duminică);
+  // zilele care lipsesc sunt nelucrătoare.
+  final Map<int, DayHours> workHours;
 
   const BookingSettingsData({
     required this.enabled,
     required this.durationMin,
-    required this.workStartMin,
-    required this.workEndMin,
-    required this.closedDays,
+    required this.workHours,
   });
 
   static const defaults = BookingSettingsData(
     enabled: false,
     durationMin: 30,
-    workStartMin: 9 * 60,
-    workEndMin: 18 * 60,
-    closedDays: {},
+    workHours: {
+      1: _kDefaultDayHours, 2: _kDefaultDayHours, 3: _kDefaultDayHours,
+      4: _kDefaultDayHours, 5: _kDefaultDayHours, 6: _kDefaultDayHours,
+      7: _kDefaultDayHours,
+    },
   );
 
   BookingSettingsData copyWith({
     bool? enabled,
     int? durationMin,
-    int? workStartMin,
-    int? workEndMin,
-    Set<int>? closedDays,
+    Map<int, DayHours>? workHours,
   }) =>
       BookingSettingsData(
-        enabled:      enabled      ?? this.enabled,
-        durationMin:  durationMin  ?? this.durationMin,
-        workStartMin: workStartMin ?? this.workStartMin,
-        workEndMin:   workEndMin   ?? this.workEndMin,
-        closedDays:   closedDays   ?? this.closedDays,
+        enabled:     enabled     ?? this.enabled,
+        durationMin: durationMin ?? this.durationMin,
+        workHours:   workHours   ?? this.workHours,
       );
 }
 
-Future<BookingSettingsData> _loadBookingSettings(
-    SharedPreferences prefs, String boardId) async {
-  final closedStr = prefs.getString(_closedDaysKeyFor(boardId)) ?? '';
-  final closed = closedStr
+// Programul salvat în formatul vechi: aceleași ore în toate zilele, mai puțin
+// cele închise.
+Map<int, DayHours> _legacyWorkHours(SharedPreferences prefs, String boardId) {
+  final closed = (prefs.getString(_closedDaysKeyFor(boardId)) ?? '')
       .split(',')
       .map((s) => int.tryParse(s.trim()))
       .whereType<int>()
       .toSet();
+  final start =
+      prefs.getInt(_workStartKeyFor(boardId)) ?? _kDefaultDayHours.startMin;
+  final end = prefs.getInt(_workEndKeyFor(boardId)) ?? _kDefaultDayHours.endMin;
+  if (end <= start) return {};
+  return {
+    for (var d = 1; d <= 7; d++)
+      if (!closed.contains(d)) d: DayHours(start, end),
+  };
+}
+
+Future<BookingSettingsData> _loadBookingSettings(
+    SharedPreferences prefs, String boardId) async {
+  final hoursStr = prefs.getString(_workHoursKeyFor(boardId));
   return BookingSettingsData(
     enabled: prefs.getBool(_bookingEnabledKeyFor(boardId)) ??
         BookingSettingsData.defaults.enabled,
     durationMin: prefs.getInt(_appointmentDurationKeyFor(boardId)) ??
         BookingSettingsData.defaults.durationMin,
-    workStartMin: prefs.getInt(_workStartKeyFor(boardId)) ??
-        BookingSettingsData.defaults.workStartMin,
-    workEndMin: prefs.getInt(_workEndKeyFor(boardId)) ??
-        BookingSettingsData.defaults.workEndMin,
-    closedDays: closed,
+    workHours: hoursStr != null
+        ? parseWorkHours(hoursStr)
+        : _legacyWorkHours(prefs, boardId),
   );
 }
 
@@ -951,9 +1004,122 @@ Future<void> _saveBookingSettings(String boardId, BookingSettingsData s) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool(_bookingEnabledKeyFor(boardId), s.enabled);
   await prefs.setInt(_appointmentDurationKeyFor(boardId), s.durationMin);
-  await prefs.setInt(_workStartKeyFor(boardId), s.workStartMin);
-  await prefs.setInt(_workEndKeyFor(boardId), s.workEndMin);
-  await prefs.setString(_closedDaysKeyFor(boardId), s.closedDays.join(','));
+  await prefs.setString(_workHoursKeyFor(boardId), encodeWorkHours(s.workHours));
+}
+
+// Graficul programului: câte un rând pe zi, cu o bară între ora de deschidere
+// și cea de închidere. Axa merge de la cea mai devreme deschidere la cea mai
+// târzie închidere (pe ore întregi).
+class _WorkHoursChart extends StatelessWidget {
+  final Map<int, String> dayLabels;
+  final Map<int, DayHours> workHours;
+  final void Function(int day) onTapDay;
+
+  const _WorkHoursChart({
+    required this.dayLabels,
+    required this.workHours,
+    required this.onTapDay,
+  });
+
+  static const _labelWidth = 30.0;
+  static const _hoursWidth = 92.0;
+
+  @override
+  Widget build(BuildContext context) {
+    var axisStart = 0;
+    var axisEnd = 24 * 60;
+    if (workHours.isNotEmpty) {
+      final hours = workHours.values;
+      axisStart =
+          hours.map((h) => h.startMin).reduce((a, b) => a < b ? a : b) ~/ 60 * 60;
+      axisEnd =
+          (hours.map((h) => h.endMin).reduce((a, b) => a > b ? a : b) + 59) ~/
+              60 *
+              60;
+    }
+    final span = axisEnd - axisStart;
+    final barColor = Theme.of(context).colorScheme.primary;
+    final axisStyle = TextStyle(fontSize: 10, color: Colors.grey.shade600);
+
+    return Column(
+      children: [
+        for (final e in dayLabels.entries)
+          InkWell(
+            onTap: () => onTapDay(e.key),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: _labelWidth,
+                    child: Text(e.value,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                  Expanded(
+                    child: LayoutBuilder(builder: (_, c) {
+                      final h = workHours[e.key];
+                      return Stack(
+                        children: [
+                          Container(
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          if (h != null)
+                            Positioned(
+                              left: c.maxWidth * (h.startMin - axisStart) / span,
+                              width:
+                                  c.maxWidth * (h.endMin - h.startMin) / span,
+                              top: 0,
+                              bottom: 0,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: barColor,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    }),
+                  ),
+                  SizedBox(
+                    width: _hoursWidth,
+                    child: Text(
+                      workHours[e.key] == null
+                          ? tr('închis', 'closed')
+                          : '${formatMinutesOfDay(workHours[e.key]!.startMin)}–'
+                              '${formatMinutesOfDay(workHours[e.key]!.endMin)}',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: workHours[e.key] == null
+                              ? Colors.grey.shade500
+                              : Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Padding(
+          padding:
+              const EdgeInsets.only(left: _labelWidth, right: _hoursWidth),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(formatMinutesOfDay(axisStart % (24 * 60)), style: axisStyle),
+              Text(axisEnd == 24 * 60 ? '24:00' : formatMinutesOfDay(axisEnd),
+                  style: axisStyle),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // Numărul de tabele (categorii de servicii). ID-urile alarmelor includ indexul
@@ -2388,10 +2554,11 @@ class _ManagementPageState extends State<ManagementPage>
 
     for (var d = 0; d <= horizonDays && result.length < maxResults; d++) {
       final date = today.add(Duration(days: d));
-      if (_bookingSettings.closedDays.contains(date.weekday)) continue;
+      final hours = _bookingSettings.workHours[date.weekday];
+      if (hours == null) continue;
 
-      final dayStart = date.add(Duration(minutes: _bookingSettings.workStartMin));
-      final dayEnd   = date.add(Duration(minutes: _bookingSettings.workEndMin));
+      final dayStart = date.add(Duration(minutes: hours.startMin));
+      final dayEnd   = date.add(Duration(minutes: hours.endMin));
       var cursor = dayStart.isBefore(now)
           ? _roundUpToSlot(now, dayStart, durationMin)
           : dayStart;
@@ -3058,17 +3225,20 @@ class _ManagementPageState extends State<ManagementPage>
   // ── Dialog rezervări prin SMS ────────────────────────────────────────────────
   Future<void> _showBookingSettingsDialog() async {
     bool enabled = _bookingSettings.enabled;
-    TimeOfDay workStart = TimeOfDay(
-        hour: _bookingSettings.workStartMin ~/ 60,
-        minute: _bookingSettings.workStartMin % 60);
-    TimeOfDay workEnd = TimeOfDay(
-        hour: _bookingSettings.workEndMin ~/ 60,
-        minute: _bookingSettings.workEndMin % 60);
-    final closedDays = Set<int>.of(_bookingSettings.closedDays);
+    final workHours = Map<int, DayHours>.of(_bookingSettings.workHours);
+    // Orele propuse pentru o zi nou bifată: ultimele setate în acest dialog.
+    DayHours suggested =
+        workHours.isEmpty ? _kDefaultDayHours : workHours.values.first;
 
     final dayLabels = {
       1: tr('L', 'Mo'), 2: tr('Ma', 'Tu'), 3: tr('Mi', 'We'), 4: tr('J', 'Th'),
       5: tr('V', 'Fr'), 6: tr('S', 'Sa'), 7: tr('D', 'Su'),
+    };
+    final dayNames = {
+      1: tr('Luni', 'Monday'), 2: tr('Marți', 'Tuesday'),
+      3: tr('Miercuri', 'Wednesday'), 4: tr('Joi', 'Thursday'),
+      5: tr('Vineri', 'Friday'), 6: tr('Sâmbătă', 'Saturday'),
+      7: tr('Duminică', 'Sunday'),
     };
     var blockThreshold = _noShowBlockThreshold;
     var noShowSms = (await SharedPreferences.getInstance())
@@ -3161,80 +3331,63 @@ class _ManagementPageState extends State<ManagementPage>
                     value: noShowSms,
                     onChanged: (v) => setDs(() => noShowSms = v),
                   ),
-                  const SizedBox(height: 8),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(tr('Deschidere', 'Opening')),
-                          subtitle: Text(workStart.format(context)),
-                          onTap: () async {
-                            final t = await showTimePicker(
-                                context: ctx, initialTime: workStart);
-                            if (t != null) setDs(() => workStart = t);
-                          },
-                        ),
-                      ),
-                      Expanded(
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(tr('Închidere', 'Closing')),
-                          subtitle: Text(workEnd.format(context)),
-                          onTap: () async {
-                            final t = await showTimePicker(
-                                context: ctx, initialTime: workEnd);
-                            if (t != null) setDs(() => workEnd = t);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(tr('Zile în care NU lucrezi (fără programări)', 'Days you do NOT work (no appointments)'),
+                  const SizedBox(height: 16),
+                  Text(tr('Zile în care lucrezi', 'Days you work'),
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
                     children: dayLabels.entries.map((e) {
-                      final selected = closedDays.contains(e.key);
                       return FilterChip(
                         label: Text(e.value),
-                        selected: selected,
-                        selectedColor: Colors.red.shade100,
-                        checkmarkColor: Colors.red.shade700,
-                        onSelected: (sel) => setDs(() {
-                          if (sel) {
-                            closedDays.add(e.key);
-                          } else {
-                            closedDays.remove(e.key);
+                        selected: workHours.containsKey(e.key),
+                        selectedColor: Colors.green.shade100,
+                        checkmarkColor: Colors.green.shade700,
+                        onSelected: (sel) async {
+                          if (!sel) {
+                            setDs(() => workHours.remove(e.key));
+                            return;
                           }
-                        }),
+                          final h = await _askDayHours(
+                              ctx, dayNames[e.key]!, suggested);
+                          if (h == null) return;
+                          setDs(() {
+                            workHours[e.key] = h;
+                            suggested = h;
+                          });
+                        },
                       );
                     }).toList(),
                   ),
+                  const SizedBox(height: 10),
+                  _WorkHoursChart(
+                    dayLabels: dayLabels,
+                    workHours: workHours,
+                    onTapDay: (day) async {
+                      final h = await _askDayHours(
+                          ctx, dayNames[day]!, workHours[day] ?? suggested);
+                      if (h == null) return;
+                      setDs(() {
+                        workHours[day] = h;
+                        suggested = h;
+                      });
+                    },
+                  ),
                   const SizedBox(height: 6),
-                  Builder(builder: (_) {
-                    final open = dayLabels.entries
-                        .where((e) => !closedDays.contains(e.key))
-                        .map((e) => e.value)
-                        .toList();
-                    return Text(
-                      open.isEmpty
-                          ? tr('⚠️  Toate zilele sunt bifate — nu se poate face '
-                              'nicio programare.',
-                          '⚠️  All days are ticked — no appointment '
-                          'can be made.')
-                          : tr('Se pot face programări: ${open.join(', ')}', 'Appointments possible: ${open.join(', ')}'),
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: open.isEmpty
-                              ? Colors.orange.shade700
-                              : Colors.grey.shade700),
-                    );
-                  }),
+                  Text(
+                    workHours.isEmpty
+                        ? tr('⚠️  Nicio zi bifată — nu se poate face nicio '
+                            'programare.',
+                        '⚠️  No day is ticked — no appointment '
+                        'can be made.')
+                        : tr('Atinge o zi din grafic pentru a-i schimba orele.', 'Tap a day in the chart to change its hours.'),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: workHours.isEmpty
+                            ? Colors.orange.shade700
+                            : Colors.grey.shade700),
+                  ),
                 ],
               ),
             ),
@@ -3255,23 +3408,9 @@ class _ManagementPageState extends State<ManagementPage>
 
     if (saved != true) return;
 
-    final startMin = workStart.hour * 60 + workStart.minute;
-    final endMin = workEnd.hour * 60 + workEnd.minute;
-    if (endMin <= startMin) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text(tr('Ora de închidere trebuie să fie după cea de deschidere.', 'The closing time must be after the opening time.')),
-        ));
-      }
-      return;
-    }
-
     final updated = _bookingSettings.copyWith(
       enabled: enabled,
-      workStartMin: startMin,
-      workEndMin: endMin,
-      closedDays: closedDays,
+      workHours: workHours,
     );
     setState(() {
       _bookingSettings = updated;
@@ -3282,6 +3421,78 @@ class _ManagementPageState extends State<ManagementPage>
     await prefs.setInt(kNoShowThresholdKey, blockThreshold);
     await prefs.setBool(kNoShowSmsKey, noShowSms);
     await _recomputeFreeSlots();
+  }
+
+  // Intervalul orar al unei zile lucrătoare; null dacă s-a renunțat.
+  Future<DayHours?> _askDayHours(
+      BuildContext ctx, String dayName, DayHours initial) {
+    var start =
+        TimeOfDay(hour: initial.startMin ~/ 60, minute: initial.startMin % 60);
+    var end = TimeOfDay(hour: initial.endMin ~/ 60, minute: initial.endMin % 60);
+    return showDialog<DayHours>(
+      context: ctx,
+      builder: (dctx) => StatefulBuilder(
+        builder: (dctx, setDs) {
+          final startMin = start.hour * 60 + start.minute;
+          final endMin = end.hour * 60 + end.minute;
+          final valid = endMin > startMin;
+          return AlertDialog(
+            title: Text(tr('Program · $dayName', 'Hours · $dayName')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(tr('Deschidere', 'Opening')),
+                        subtitle: Text(formatMinutesOfDay(startMin)),
+                        onTap: () async {
+                          final t = await showTimePicker(
+                              context: dctx, initialTime: start);
+                          if (t != null) setDs(() => start = t);
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(tr('Închidere', 'Closing')),
+                        subtitle: Text(formatMinutesOfDay(endMin)),
+                        onTap: () async {
+                          final t = await showTimePicker(
+                              context: dctx, initialTime: end);
+                          if (t != null) setDs(() => end = t);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                if (!valid)
+                  Text(
+                    tr('Ora de închidere trebuie să fie după cea de deschidere.', 'The closing time must be after the opening time.'),
+                    style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dctx),
+                child: Text(tr('Anulează', 'Cancel')),
+              ),
+              FilledButton(
+                onPressed: valid
+                    ? () => Navigator.pop(dctx, DayHours(startMin, endMin))
+                    : null,
+                child: Text(tr('Salvează', 'Save')),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   // ── Dialog sincronizare dispozitiv ───────────────────────────────────────────

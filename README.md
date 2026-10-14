@@ -26,6 +26,7 @@ Salons, clinics and workshops use it for appointments booked by SMS.
 - **Records with expiry dates**, each with up to 3 phone numbers, organised in up to 10 tables
 - **Local alerts** before and at expiry
 - **SMS reminders** to clients, with an editable message template
+- **Working hours per day of the week** (e.g. a shorter Saturday, closed on Sunday); the bot only offers slots inside them
 - **SMS self-booking per category and service:** a client sends `liber unghii` (or `free unghii`), picks a service
   from the list, then a free slot. Each service has its own duration, and the free slots are
   computed from it.

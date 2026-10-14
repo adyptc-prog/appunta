@@ -8,13 +8,15 @@ import java.time.format.DateTimeFormatter
 
 data class BoardInfo(val id: String, val name: String)
 
+// Programul unei zile lucrătoare (minute de la miezul nopții).
+data class DayHours(val startMin: Int, val endMin: Int)
+
 data class BoardBookingSettings(
     val enabled: Boolean,
     val durationMin: Int,
-    // Program de lucru (minute de la miezul nopții).
-    val workStartMin: Int,
-    val workEndMin: Int,
-    val closedDays: Set<Int>, // 1=luni .. 7=duminică, la fel ca DateTime.weekday din Dart
+    // Programul de lucru pe zile (1=luni .. 7=duminică, la fel ca
+    // DateTime.weekday din Dart); zilele care lipsesc sunt nelucrătoare.
+    val workHours: Map<Int, DayHours>,
 )
 
 data class BusyInterval(val startMin: LocalDateTime, val endMin: LocalDateTime)
@@ -69,17 +71,42 @@ object BookingSettings {
 
     fun loadSettings(context: Context, boardId: String): BoardBookingSettings {
         val p = prefs(context)
-        val closedStr = p.getString("flutter.closed_days_$boardId", "") ?: ""
-        val closed = closedStr.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+        val hoursStr = p.getString("flutter.work_hours_$boardId", null)
         val result = BoardBookingSettings(
             enabled = p.getBoolean("flutter.booking_enabled_$boardId", false),
             durationMin = getIntCompat(p, "flutter.appointment_duration_$boardId", 30),
-            workStartMin = getIntCompat(p, "flutter.work_start_$boardId", 9 * 60),
-            workEndMin = getIntCompat(p, "flutter.work_end_$boardId", 18 * 60),
-            closedDays = closed,
+            workHours = if (hoursStr != null) parseWorkHours(hoursStr) else legacyWorkHours(p, boardId),
         )
         Diag.i("loadSettings: boardId=$boardId -> $result")
         return result
+    }
+
+    private val WORK_HOURS_ENTRY = Regex("""^(\d+):(\d+)-(\d+)$""")
+
+    // „1:540-1080,3:600-840” (zi:deschidere-închidere) — scris de
+    // encodeWorkHours din Dart; intrările invalide sunt sărite.
+    fun parseWorkHours(raw: String): Map<Int, DayHours> {
+        val result = mutableMapOf<Int, DayHours>()
+        for (part in raw.split(",")) {
+            val m = WORK_HOURS_ENTRY.matchEntire(part.trim()) ?: continue
+            val day = m.groupValues[1].toIntOrNull() ?: continue
+            val start = m.groupValues[2].toIntOrNull() ?: continue
+            val end = m.groupValues[3].toIntOrNull() ?: continue
+            if (day !in 1..7 || end <= start || end > 24 * 60) continue
+            result[day] = DayHours(start, end)
+        }
+        return result
+    }
+
+    // Programul salvat în formatul vechi (înainte de programul pe zile):
+    // aceleași ore în toate zilele, mai puțin cele închise.
+    private fun legacyWorkHours(p: android.content.SharedPreferences, boardId: String): Map<Int, DayHours> {
+        val closedStr = p.getString("flutter.closed_days_$boardId", "") ?: ""
+        val closed = closedStr.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+        val start = getIntCompat(p, "flutter.work_start_$boardId", 9 * 60)
+        val end = getIntCompat(p, "flutter.work_end_$boardId", 18 * 60)
+        if (end <= start) return emptyMap()
+        return (1..7).filter { it !in closed }.associateWith { DayHours(start, end) }
     }
 
     // Cu câte minute înainte de expirare vine alerta — ultima valoare aleasă

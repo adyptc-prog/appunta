@@ -71,7 +71,7 @@ class ServiceDurationTest {
     @Test
     fun `orele libere nu se suprapun cu programarile de durate diferite`() {
         val settings = BoardBookingSettings(
-            enabled = true, durationMin = 60, workStartMin = 9 * 60, workEndMin = 15 * 60, closedDays = emptySet(),
+            enabled = true, durationMin = 60, workHours = mapOf(1 to DayHours(9 * 60, 15 * 60)),
         )
         val busy = BookingSettings.loadBusyIntervals(context, "b1", 30)
         val slots = FreeSlotCalculator.compute(busy, settings, at(8), horizonDays = 0, maxResults = 10)

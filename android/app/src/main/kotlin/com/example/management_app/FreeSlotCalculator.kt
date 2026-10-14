@@ -1,7 +1,6 @@
 package com.example.management_app
 
 import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalDateTime
 
 data class FreeSlot(val start: LocalDateTime, val end: LocalDateTime)
@@ -35,9 +34,10 @@ object FreeSlotCalculator {
         val lastDay = day.plusDays(horizonDays.toLong())
 
         while (!day.isAfter(lastDay) && result.size < maxResults) {
-            if (!isClosed(day, settings.closedDays)) {
-                val dayStart = day.atStartOfDay().plusMinutes(settings.workStartMin.toLong())
-                val dayEnd = day.atStartOfDay().plusMinutes(settings.workEndMin.toLong())
+            val hours = settings.workHours[day.dayOfWeek.value]
+            if (hours != null) {
+                val dayStart = day.atStartOfDay().plusMinutes(hours.startMin.toLong())
+                val dayEnd = day.atStartOfDay().plusMinutes(hours.endMin.toLong())
                 var cursor = if (dayStart.isBefore(from)) roundUpToSlot(from, dayStart, duration) else dayStart
 
                 val dayBusy = sortedBusy.filter { it.endMin.isAfter(dayStart) && it.startMin.isBefore(dayEnd) }
@@ -67,7 +67,4 @@ object FreeSlotCalculator {
         val slots = (minutesFromStart + durationMin - 1) / durationMin
         return dayStart.plusMinutes(slots * durationMin)
     }
-
-    private fun isClosed(day: LocalDate, closedDays: Set<Int>): Boolean =
-        closedDays.contains(day.dayOfWeek.value)
 }
