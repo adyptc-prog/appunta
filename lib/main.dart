@@ -4124,6 +4124,19 @@ class _ManagementPageState extends State<ManagementPage>
     );
   }
 
+  PopupMenuItem<String> _menuItem(String value, IconData icon, Color? color,
+      String label, String? status) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(icon, color: color),
+        title: Text(label),
+        subtitle: status == null ? null : Text(status),
+      ),
+    );
+  }
+
   // ── Build ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -4146,9 +4159,13 @@ class _ManagementPageState extends State<ManagementPage>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(_activeBoard.name,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  Flexible(
+                    child: Text(_activeBoard.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
                   const Icon(Icons.arrow_drop_down, color: Colors.white70),
                 ],
               ),
@@ -4156,48 +4173,6 @@ class _ManagementPageState extends State<ManagementPage>
           ),
         ),
         actions: [
-          // Indicator licență (Android)
-          if (Platform.isAndroid)
-            IconButton(
-              icon: Icon(
-                LicenseService.isExpiringSoon
-                    ? Icons.warning_amber_rounded
-                    : LicenseService.isLicensed
-                    ? Icons.verified_user
-                    : LicenseService.isTrialActive
-                        ? Icons.lock_open_outlined
-                        : Icons.lock_outline,
-                color: LicenseService.isExpiringSoon
-                    ? Colors.orangeAccent.shade100
-                    : LicenseService.isLicensed
-                    ? Colors.greenAccent.shade100
-                    : LicenseService.isTrialActive
-                        ? Colors.orangeAccent.shade100
-                        : Colors.white54,
-              ),
-              tooltip: LicenseService.isExpiringSoon
-                  ? tr('Licența expiră în ${LicenseService.newLicenseDaysUntilExpiry} zile', 'The license expires in ${LicenseService.newLicenseDaysUntilExpiry} days')
-                  : LicenseService.isLicensed
-                  ? tr('Licență activă', 'License active')
-                  : LicenseService.isTrialActive
-                      ? tr('Trial activ · ${LicenseService.trialDaysLeft} zile rămase', 'Trial active · ${LicenseService.trialDaysLeft} days left')
-                      : tr('Trial expirat · activează licența', 'Trial expired · activate the license'),
-              onPressed: _openLicenseScreen,
-            ),
-          // Buton sincronizare — vizibil doar pe Android
-          if (SyncService.isSupported)
-            IconButton(
-              icon: Icon(
-                SyncService.isActive ? Icons.sync : Icons.sync_disabled,
-                color: SyncService.isActive
-                    ? Colors.greenAccent.shade100
-                    : Colors.white54,
-              ),
-              tooltip: SyncService.isActive
-                  ? tr('Sincronizare activă · ${SyncService.partnerPhone}', 'Sync active · ${SyncService.partnerPhone}')
-                  : tr('Configurează sincronizare', 'Set up sync'),
-              onPressed: _showSyncDialog,
-            ),
           // Clienți cu neprezentări — doar când există
           if (_noShows.isNotEmpty)
             IconButton(
@@ -4205,14 +4180,6 @@ class _ManagementPageState extends State<ManagementPage>
                   color: Colors.redAccent.shade100),
               tooltip: tr('Clienți cu neprezentări', 'Clients with no-shows'),
               onPressed: _showNoShowClients,
-            ),
-          // Buton backup & restaurare — vizibil doar pe Android
-          if (BackupService.isSupported)
-            IconButton(
-              icon: const Icon(Icons.settings_backup_restore,
-                  color: Colors.white70),
-              tooltip: tr('Backup & restaurare', 'Backup & restore'),
-              onPressed: _openBackupScreen,
             ),
           // Buton rezervări prin SMS — vizibil doar pe Android
           if (Platform.isAndroid)
@@ -4244,12 +4211,66 @@ class _ManagementPageState extends State<ManagementPage>
               });
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.language, color: Colors.white70),
-            tooltip: tr('Limba aplicației', 'App language'),
-            onPressed: _showLanguageDialog,
+          // Meniu „mai multe” — licență, sincronizare, backup, limbă.
+          // Ținute aici ca bara să lase loc titlului (selectorul de tabele)
+          // și pe telefoane înguste.
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: tr('Mai multe', 'More'),
+            onSelected: (value) {
+              switch (value) {
+                case 'license':
+                  _openLicenseScreen();
+                case 'sync':
+                  _showSyncDialog();
+                case 'backup':
+                  _openBackupScreen();
+                case 'language':
+                  _showLanguageDialog();
+              }
+            },
+            itemBuilder: (context) => [
+              if (Platform.isAndroid)
+                _menuItem(
+                  'license',
+                  LicenseService.isExpiringSoon
+                      ? Icons.warning_amber_rounded
+                      : LicenseService.isLicensed
+                          ? Icons.verified_user
+                          : LicenseService.isTrialActive
+                              ? Icons.lock_open_outlined
+                              : Icons.lock_outline,
+                  LicenseService.isExpiringSoon || LicenseService.isTrialActive
+                      ? Colors.orange
+                      : LicenseService.isLicensed
+                          ? Colors.green
+                          : Colors.grey,
+                  tr('Licență', 'License'),
+                  LicenseService.isExpiringSoon
+                      ? tr('Expiră în ${LicenseService.newLicenseDaysUntilExpiry} zile', 'Expires in ${LicenseService.newLicenseDaysUntilExpiry} days')
+                      : LicenseService.isLicensed
+                          ? tr('Activă', 'Active')
+                          : LicenseService.isTrialActive
+                              ? tr('Trial · ${LicenseService.trialDaysLeft} zile rămase', 'Trial · ${LicenseService.trialDaysLeft} days left')
+                              : tr('Trial expirat', 'Trial expired'),
+                ),
+              if (SyncService.isSupported)
+                _menuItem(
+                  'sync',
+                  SyncService.isActive ? Icons.sync : Icons.sync_disabled,
+                  SyncService.isActive ? Colors.green : Colors.grey,
+                  tr('Sincronizare', 'Sync'),
+                  SyncService.isActive
+                      ? tr('Activă · ${SyncService.partnerPhone}', 'Active · ${SyncService.partnerPhone}')
+                      : tr('Neconfigurată', 'Not set up'),
+                ),
+              if (BackupService.isSupported)
+                _menuItem('backup', Icons.settings_backup_restore, null,
+                    tr('Backup & restaurare', 'Backup & restore'), null),
+              _menuItem('language', Icons.language, null,
+                  tr('Limba aplicației', 'App language'), null),
+            ],
           ),
-          const SizedBox(width: 4),
         ],
       ),
       body: _loading

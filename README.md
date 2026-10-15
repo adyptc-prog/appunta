@@ -40,7 +40,7 @@ Salons, clinics and workshops use it for appointments booked by SMS.
 - **Two-phone sync over SMS**, with messages signed by a pairing code entered on both phones
 - **Encrypted backup**, daily and manual, to phone storage or a USB stick
 - **Reports** for any period
-- **Romanian and English**, chosen from the globe icon in the app bar (on first launch: Romanian on a Romanian phone, English otherwise)
+- **Romanian and English**, chosen under App language in the ⋮ menu of the app bar (on first launch: Romanian on a Romanian phone, English otherwise)
 - 30-day free trial, then an activation license (see [Free Trial & Activation License](#free-trial--activation-license))
 
 ---
