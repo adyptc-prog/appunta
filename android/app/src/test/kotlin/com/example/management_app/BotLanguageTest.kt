@@ -120,7 +120,7 @@ class BotLanguageTest {
     }
 
     @Test
-    fun `lista categoriilor foloseste cuvantul-cheie din limba aplicatiei`() {
+    fun `lista categoriilor e in limba aplicatiei`() {
         context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).edit()
             .putString("flutter.management_boards",
                 JSONArray()
@@ -135,13 +135,21 @@ class BotLanguageTest {
 
         val ro = say("liber")
         assertNotNull(ro)
-        assertTrue(ro!!, ro.startsWith("Pentru ce categorie dorești programare? Scrie:\nLIBER "))
+        assertEquals(
+            "Pentru ce categorie dorești programare?\n1. Tuns\n2. Manichiura\n" +
+                "Răspunde cu numărul categoriei dorite.",
+            ro,
+        )
 
         setAppLanguage("en")
         val en = say("free")
-        assertNotNull(en)
-        assertTrue(en!!, en.startsWith("Which category do you want an appointment for? Text:\nFREE "))
-        // Răspunsul cu cuvântul englezesc + numele categoriei e înțeles.
+        assertEquals(
+            "Which category do you want an appointment for?\n1. Tuns\n2. Manichiura\n" +
+                "Reply with the number of the category you want.",
+            en,
+        )
+        assertTrue(say("2")!!.startsWith("Free times, Manichiura:"))
+        // Numele categoriei scris după cuvântul-cheie e înțeles în continuare.
         assertTrue(say("free manichiura")!!.startsWith("Free times, Manichiura:"))
     }
 

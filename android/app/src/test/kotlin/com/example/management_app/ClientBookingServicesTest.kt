@@ -78,15 +78,60 @@ class ClientBookingServicesTest {
     }
 
     @Test
-    fun `LIBER fara categorie trimite lista categoriilor active`() {
+    fun `LIBER fara categorie trimite lista numerotata a categoriilor active`() {
         receiver.handleMessage(context, client, "liber")
-        val text = last()!!
-        assertTrue(text.startsWith("Pentru ce categorie"))
-        assertTrue(text.contains("LIBER UNGHII"))
-        assertTrue(text.contains("LIBER PAR"))
-        assertTrue(text.contains("LIBER GENE FALSE"))
-        // Categoria fără rezervări active nu apare.
-        assertFalse(text.contains("MASAJ"))
+        // Categoria fără rezervări active (Masaj) nu apare.
+        assertEquals(
+            "Pentru ce categorie dorești programare?\n1. Unghii\n2. Păr\n3. Gene false\n" +
+                "Răspunde cu numărul categoriei dorite.",
+            last(),
+        )
+    }
+
+    @Test
+    fun `fluxul complet cu categoria aleasa dupa numar`() {
+        receiver.handleMessage(context, client, "liber")
+        receiver.handleMessage(context, client, "1")
+        assertTrue(last()!!, last()!!.startsWith("Servicii Unghii:\n1. Semipermanentă"))
+
+        receiver.handleMessage(context, client, "2")
+        assertTrue(last()!!, last()!!.startsWith("Ore libere Unghii – Gel:"))
+
+        receiver.handleMessage(context, client, "1")
+        assertTrue(last()!!, last()!!.startsWith("Programarea ta la Unghii – Gel pe "))
+        assertEquals("Gel", queued().single().getString("v"))
+    }
+
+    @Test
+    fun `categoria cu un singur serviciu aleasa dupa numar merge direct la ore`() {
+        receiver.handleMessage(context, client, "liber")
+        receiver.handleMessage(context, client, "optiunea 2")
+        assertTrue(last()!!, last()!!.startsWith("Ore libere Păr – Tuns:"))
+    }
+
+    @Test
+    fun `numar de categorie invalid si text neinteles`() {
+        receiver.handleMessage(context, client, "liber")
+        receiver.handleMessage(context, client, "7")
+        assertTrue(last()!!, last()!!.startsWith("Opțiune invalidă. Răspunde cu numărul unei categorii"))
+
+        receiver.handleMessage(context, client, "unghii")
+        assertEquals("Nu am înțeles. Răspunde doar cu numărul categoriei dorite (ex. 1).", last())
+
+        // Lista rămâne activă: alegerea corectă merge în continuare.
+        receiver.handleMessage(context, client, "3")
+        assertTrue(last()!!, last()!!.startsWith("Ore libere Gene false:"))
+    }
+
+    @Test
+    fun `numerele se raporteaza la lista trimisa, nu la tabelele activate ulterior`() {
+        receiver.handleMessage(context, client, "liber")
+        context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).edit()
+            .putBoolean("flutter.booking_enabled_b1", false)
+            .commit()
+        // „2” rămâne Păr, deși acum Unghii nu mai e activă.
+        receiver.handleMessage(context, client, "2")
+        assertTrue(last()!!, last()!!.startsWith("Ore libere Păr – Tuns:"))
     }
 
     @Test

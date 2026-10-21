@@ -17,16 +17,18 @@ import java.util.concurrent.Executors
  * Bot de rezervări prin SMS pentru clienți.
  *
  *   „liber”                    → lista categoriilor (tabelelor) cu rezervări
- *                                 active; cu una singură, direct pasul următor
+ *                                 active, numerotate; cu una singură, direct
+ *                                 pasul următor
  *   „liber <categorie>”        → lista serviciilor categoriei, numerotate
  *                                 (cu un singur serviciu sau niciunul, direct
- *                                 orele libere)
+ *                                 orele libere) — la fel ca alegerea
+ *                                 categoriei după număr
  *   un număr după servicii     → până la 6 ore libere, numerotate, calculate
  *                                 cu durata serviciului ales
  *   „next”                     → următoarea pagină de ore libere
- *   un număr (ex. „2”)         → alegere dintr-o listă de servicii, de ore
- *                                 sau de anulare (cea mai recentă
- *                                 interacțiune câștigă)
+ *   un număr (ex. „2”)         → alegere dintr-o listă de categorii, de
+ *                                 servicii, de ore sau de anulare (cea mai
+ *                                 recentă interacțiune câștigă)
  *   „anuleaza” / „anulare”     → caută programările viitoare de pe
  *                                 acest număr (create de bot SAU adăugate
  *                                 manual din aplicație) și le anulează —
@@ -51,6 +53,7 @@ class ClientBookingReceiver : BroadcastReceiver() {
         private const val PREFS_NAME        = "ClientBookingPrefs"
         private const val OFFERS_KEY        = "offers"
         private const val SERVICE_OFFERS_KEY = "serviceOffers"
+        private const val CATEGORY_OFFERS_KEY = "categoryOffers"
         private const val OFFER_TTL_MIN     = 20L
         private const val CANCEL_OFFERS_KEY = "cancelOffers"
         private const val RATE_KEY          = "rateLimits"
@@ -166,10 +169,11 @@ class ClientBookingReceiver : BroadcastReceiver() {
 
         val liberMatch  = LIBER_RE.find(body)
         val cancelMatch = CANCEL_RE.find(body)
+        val categoryOffer = getCategoryOffer(context, senderDigits)
         val serviceOffer = getServiceOffer(context, senderDigits)
         val bookingOffer = getOffer(context, senderDigits)
         val cancelOffer  = getCancelOffer(context, senderDigits)
-        val hasActiveList = serviceOffer != null || bookingOffer != null || cancelOffer != null
+        val hasActiveList = categoryOffer != null || serviceOffer != null || bookingOffer != null || cancelOffer != null
         val numberMatch = NUMBER_RE.find(body)
             ?: if (hasActiveList) LOOSE_NUMBER_RE.find(body) else null
         Diag.i("handleMessage: liberMatch=${liberMatch != null} cancelMatch=${cancelMatch != null} numberMatch=${numberMatch != null} activeList=$hasActiveList")
@@ -179,6 +183,7 @@ class ClientBookingReceiver : BroadcastReceiver() {
         // ca la alegerea numerică.
         val helpFor = if (!isCommand && body.length <= HELP_MAX_LEN) {
             listOfNotNull(
+                categoryOffer?.takeUnless { it.optBoolean("helped") }?.let { "category" to it.optLong("ts", 0L) },
                 serviceOffer?.takeUnless { it.optBoolean("helped") }?.let { "service" to it.optLong("ts", 0L) },
                 bookingOffer?.takeUnless { it.optBoolean("helped") }?.let { "booking" to it.optLong("ts", 0L) },
                 cancelOffer?.takeUnless { it.optBoolean("helped") }?.let { "cancel" to it.optLong("ts", 0L) },
@@ -196,8 +201,9 @@ class ClientBookingReceiver : BroadcastReceiver() {
             if (limit == BotLimits.Decision.NUMBER_LIMIT) notifyLimit(context, sender, senderDigits)
             return
         }
-        // Un număr se referă la lista activă cea mai recentă (serviciu, oră sau anulare).
+        // Un număr se referă la lista activă cea mai recentă (categorie, serviciu, oră sau anulare).
         val numberTarget = listOfNotNull(
+            categoryOffer?.let { "category" to it.optLong("ts", 0L) },
             serviceOffer?.let { "service" to it.optLong("ts", 0L) },
             bookingOffer?.let { "booking" to it.optLong("ts", 0L) },
             cancelOffer?.let  { "cancel"  to it.optLong("ts", 0L) },
@@ -208,6 +214,16 @@ class ClientBookingReceiver : BroadcastReceiver() {
         if (!cancelRelated && blockedForNoShows(context, sender, senderDigits)) return
 
         when {
+            helpFor == "category" -> {
+                markHelped(context, CATEGORY_OFFERS_KEY, senderDigits)
+                sendSms(
+                    context, sender,
+                    tr(
+                        "Nu am înțeles. Răspunde doar cu numărul categoriei dorite (ex. 1).",
+                        "I didn't understand. Reply with just the number of the category you want (e.g. 1).",
+                    )
+                )
+            }
             helpFor == "service" -> {
                 markHelped(context, SERVICE_OFFERS_KEY, senderDigits)
                 sendSms(
@@ -258,6 +274,7 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 val choice = numberMatch.groupValues[1].toInt()
                 when (numberTarget) {
                     "cancel" -> confirmCancel(context, sender, senderDigits, choice)
+                    "category" -> confirmCategory(context, sender, senderDigits, choice)
                     "service" -> confirmService(context, sender, senderDigits, choice)
                     else     -> confirmOffer(context, sender, senderDigits, choice)
                 }
@@ -364,9 +381,6 @@ class ClientBookingReceiver : BroadcastReceiver() {
         return null
     }
 
-    // Numele categoriei așa cum îl poate scrie clientul (fără diacritice).
-    private fun commandName(board: BoardInfo): String = normalize(board.name).uppercase()
-
     // ── Stocare ofertă activă per client ─────────────────────────────────────────
     private fun bookingPrefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -438,6 +452,35 @@ class ClientBookingReceiver : BroadcastReceiver() {
         bookingPrefs(context).edit().putString(SERVICE_OFFERS_KEY, offers.toString()).apply()
     }
 
+    // ── Stocare listă de categorii activă per client ─────────────────────────────
+    // Ca la servicii, se memorează lista trimisă: „2” înseamnă a doua categorie
+    // din mesajul primit, chiar dacă între timp s-a activat sau dezactivat alta.
+    private fun loadCategoryOffers(context: Context): JSONObject = try {
+        JSONObject(bookingPrefs(context).getString(CATEGORY_OFFERS_KEY, "{}") ?: "{}")
+    } catch (_: Exception) {
+        JSONObject()
+    }
+
+    private fun getCategoryOffer(context: Context, senderDigits: String): JSONObject? {
+        val o = loadCategoryOffers(context).optJSONObject(senderDigits) ?: return null
+        if (System.currentTimeMillis() - o.optLong("ts", 0L) > OFFER_TTL_MIN * 60_000L) return null
+        return o
+    }
+
+    private fun setCategoryOffer(context: Context, senderDigits: String, boards: List<BoardInfo>) {
+        val offers = loadCategoryOffers(context)
+        val arr = JSONArray()
+        boards.forEach { arr.put(it.id) }
+        offers.put(senderDigits, JSONObject().put("boards", arr).put("ts", System.currentTimeMillis()))
+        bookingPrefs(context).edit().putString(CATEGORY_OFFERS_KEY, offers.toString()).apply()
+    }
+
+    private fun clearCategoryOffer(context: Context, senderDigits: String) {
+        val offers = loadCategoryOffers(context)
+        if (offers.remove(senderDigits) == null) return
+        bookingPrefs(context).edit().putString(CATEGORY_OFFERS_KEY, offers.toString()).apply()
+    }
+
     // ── Stocare cerere de anulare activă per client ──────────────────────────────
     // Separată de oferta de rezervare ("offers") ca să nu se confunde un răspuns
     // numeric destinat uneia cu celălalt flux — vezi dezambiguizarea din handleMessage.
@@ -498,17 +541,19 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 }
                 1 -> enabled[0]
                 else -> {
-                    // Categoriile cu rezervări active sunt publice (le alege clientul).
+                    // Categoriile cu rezervări active sunt publice (le alege
+                    // clientul cu numărul din fața lor).
                     clearServiceOffer(context, senderDigits)
                     clearOffer(context, senderDigits)
-                    val keyword = tr("LIBER", "FREE")
-                    val lines = enabled.map { "$keyword ${commandName(it)}" }
+                    setCategoryOffer(context, senderDigits, enabled)
+                    val lines = enabled.mapIndexed { i, b -> "${i + 1}. ${b.name}" }
                     sendSms(
                         context, sender,
                         tr(
-                            "Pentru ce categorie dorești programare? Scrie:",
-                            "Which category do you want an appointment for? Text:",
-                        ) + "\n${lines.joinToString("\n")}"
+                            "Pentru ce categorie dorești programare?",
+                            "Which category do you want an appointment for?",
+                        ) + "\n${lines.joinToString("\n")}\n" +
+                            tr("Răspunde cu numărul categoriei dorite.", "Reply with the number of the category you want.")
                     )
                     return
                 }
@@ -526,7 +571,44 @@ class ClientBookingReceiver : BroadcastReceiver() {
                 return
             }
         }
+        offerBoard(context, sender, senderDigits, board)
+    }
 
+    // Clientul a ales categoria din listă — urmează serviciile ei (sau orele).
+    private fun confirmCategory(context: Context, sender: String, senderDigits: String, choice: Int) {
+        val offer = getCategoryOffer(context, senderDigits)
+        if (offer == null) {
+            sendSms(context, sender, noActiveSearch())
+            return
+        }
+        val ids = offer.optJSONArray("boards") ?: JSONArray()
+        if (choice < 1 || choice > ids.length()) {
+            sendSms(
+                context, sender,
+                tr(
+                    "Opțiune invalidă. Răspunde cu numărul unei categorii din ultimul mesaj primit, " +
+                        "sau scrie LIBER pentru o căutare nouă.",
+                    "Invalid option. Reply with the number of a category from the last message you received, " +
+                        "or text FREE for a new search.",
+                )
+            )
+            return
+        }
+        val boardId = ids.optString(choice - 1, "")
+        val board = BookingSettings.loadBoards(context).firstOrNull { it.id == boardId }
+        if (board == null) {
+            // Tabelul a fost șters între timp.
+            clearCategoryOffer(context, senderDigits)
+            sendSms(context, sender, noActiveSearch())
+            return
+        }
+        offerBoard(context, sender, senderDigits, board)
+    }
+
+    // Categoria e stabilită (după nume sau după număr): verifică rezervările
+    // active, apoi trimite serviciile sau direct orele libere.
+    private fun offerBoard(context: Context, sender: String, senderDigits: String, board: BoardInfo) {
+        clearCategoryOffer(context, senderDigits)
         val settings = BookingSettings.loadSettings(context, board.id)
         Diag.i("startOffer: board=${board.id} settings.enabled=${settings.enabled}")
         if (!settings.enabled) {

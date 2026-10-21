@@ -3259,18 +3259,16 @@ class _ManagementPageState extends State<ManagementPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    tr('Clienții trimit SMS cu "liber" urmat de numele '
-                    'tabelului (categoria, ex. "liber unghii"), aleg '
-                    'serviciul din lista primită (butonul Servicii), apoi '
-                    'ora liberă — răspunzând de fiecare dată cu numărul '
-                    'opțiunii. Doar "liber" trimite lista categoriilor '
-                    'active.',
-                    'Clients text "free" followed by the table '
-                    'name (the category, e.g. "free nails"), choose '
-                    'the service from the list they receive (the Services button), then '
-                    'a free time — replying each time with the option '
-                    'number. Just "free" sends the list of active '
-                    'categories.'),
+                    tr('Clienții trimit SMS cu "liber" și aleg categoria '
+                    '(tabelul), serviciul din lista primită (butonul '
+                    'Servicii), apoi ora liberă — răspunzând de fiecare '
+                    'dată cu numărul opțiunii. Pot scrie și direct numele '
+                    'categoriei (ex. "liber unghii").',
+                    'Clients text "free" and choose the category '
+                    '(the table), the service from the list they receive '
+                    '(the Services button), then a free time — replying '
+                    'each time with the option number. They can also write '
+                    'the category name directly (e.g. "free nails").'),
                     style: TextStyle(fontSize: 13, color: Colors.black54),
                   ),
                   const SizedBox(height: 6),

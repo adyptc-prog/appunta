@@ -27,9 +27,9 @@ Salons, clinics and workshops use it for appointments booked by SMS.
 - **Local alerts** before and at expiry
 - **SMS reminders** to clients, with an editable message template
 - **Working hours per day of the week** (e.g. a shorter Saturday, closed on Sunday); the bot only offers slots inside them
-- **SMS self-booking per category and service:** a client sends `liber unghii` (or `free unghii`), picks a service
-  from the list, then a free slot. Each service has its own duration, and the free slots are
-  computed from it.
+- **SMS self-booking per category and service:** a client sends `liber` (or `free`), then picks a category,
+  a service and a free slot, each time by replying with its number. `liber unghii` skips the category list.
+  Each service has its own duration, and the free slots are computed from it.
 - **Cancellation by SMS**: the client sends `anuleaza` or `cancel`. This works for SMS bookings and for
   bookings added by hand.
 - **No-show tracking:** you confirm whether the client came after the appointment. No-shows show
@@ -48,7 +48,8 @@ Salons, clinics and workshops use it for appointments booked by SMS.
 ## How It Works
 
 ```
-Client texts "liber unghii"   →  bot replies with the services
+Client texts "liber"          →  bot replies with the numbered categories
+Client replies with a number  →  bot replies with the services
 Client replies with a number  →  bot replies with the free slots
 Client replies with a number  →  booking saved in the table, reminder scheduled
 ```
