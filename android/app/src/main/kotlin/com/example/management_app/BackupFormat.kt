@@ -5,7 +5,7 @@ import org.json.JSONObject
 import java.security.MessageDigest
 
 /**
- * Formatul fișierului de backup Organizator (.orgbackup) — logică pură, fără
+ * Formatul fișierului de backup Appunta (.orgbackup) — logică pură, fără
  * Android, testabilă pe JVM.
  *
  * Datele aplicației stau în SharedPreferences (nu în SQLite ca la Fidelio),
@@ -104,10 +104,10 @@ object BackupFormat {
         val root = try {
             JSONObject(content)
         } catch (_: Exception) {
-            throw InvalidBackupException(tr("Fișierul nu este un backup Organizator.", "The file is not an Organizator backup."))
+            throw InvalidBackupException(tr("Fișierul nu este un backup Appunta.", "The file is not an Appunta backup."))
         }
         if (root.optString("app") != APP_ID) {
-            throw InvalidBackupException(tr("Fișierul nu este un backup Organizator.", "The file is not an Organizator backup."))
+            throw InvalidBackupException(tr("Fișierul nu este un backup Appunta.", "The file is not an Appunta backup."))
         }
         val version = root.optInt("formatVersion", -1)
         if (version < 1 || version > FORMAT_VERSION) {

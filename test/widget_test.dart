@@ -22,7 +22,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Organizator'), findsOneWidget);
+    expect(find.text('Appunta'), findsOneWidget);
     expect(find.text('Nr.'), findsOneWidget);
     expect(find.text('Nume'), findsOneWidget);
     expect(find.text('Descriere'), findsOneWidget);
@@ -166,7 +166,7 @@ void main() {
   group('versiunea aplicației', () {
     setUp(() {
       PackageInfo.setMockInitialValues(
-        appName: 'Organizator',
+        appName: 'Appunta',
         packageName: 'app.sayitapp.organizator',
         version: '1.5.0',
         buildNumber: '9',

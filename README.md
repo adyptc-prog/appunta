@@ -1,4 +1,4 @@
-# Organizator
+# Appunta
 
 **Expiry tracking, SMS reminders and SMS self-booking for small businesses.**
 No server. No internet. No accounts.
@@ -9,9 +9,9 @@ No server. No internet. No accounts.
 
 ---
 
-## What is Organizator?
+## What is Appunta?
 
-Organizator is an open-source Flutter app for Android that keeps track of records with an
+Appunta is an open-source Flutter app for Android that keeps track of records with an
 expiry date and warns you, and your clients, before they expire. It also runs an SMS booking
 bot: clients book or cancel an appointment by text message, and the booking appears in the app.
 Everything runs on the phone, with no server and no internet connection.
@@ -69,15 +69,15 @@ The complete source code, including the 30-day trial check, is published here un
 don't depend on buying anything.
 
 What is sold is an **activation license**: a signed file, tied to one install code (Business ID),
-that unlocks the app after the 30-day free trial in the Organizator app distributed by Volt Academy
-(the Android APK available at [voltacademy.app/organizator.html](https://voltacademy.app/organizator.html)).
+that unlocks the app after the 30-day free trial in the Appunta app distributed by Volt Academy
+(the Android APK available at [voltacademy.app/appunta.html](https://voltacademy.app/appunta.html)).
 
 | Period | Requirement |
 |---|---|
 | First 30 days after install | Free, all features |
 | After the trial | Activation license — 30, 60 or 180 days, or permanent |
 
-Licenses are bought at [voltacademy.app/organizator.html](https://voltacademy.app/organizator.html#licentiere),
+Licenses are bought at [voltacademy.app/appunta.html](https://voltacademy.app/appunta.html#licentiere),
 where current prices are listed. Expirable licenses bought for the same install code add up, and the
 license becomes permanent automatically once their total reaches the price of a permanent license.
 
@@ -96,7 +96,7 @@ Questions about licenses: [voltacademy.app/contact.html](https://voltacademy.app
 
 ## Platform Support
 
-Organizator is built for **Android** only. SMS sending and receiving, the booking bot, alarms,
+Appunta is built for **Android** only. SMS sending and receiving, the booking bot, alarms,
 backup and license import use Android platform channels (Kotlin, in `android/app/src/main/kotlin`).
 
 ---
@@ -110,8 +110,8 @@ backup and license import use Android platform channels (Kotlin, in `android/app
 ### Run
 
 ```bash
-git clone https://github.com/adyptc-prog/organizator.git
-cd organizator
+git clone https://github.com/adyptc-prog/appunta.git
+cd appunta
 flutter pub get
 flutter run
 ```
@@ -151,7 +151,7 @@ All contributions must be compatible with the AGPL-3.0 license.
 
 ## License
 
-**Organizator — Expiry Tracking & SMS Booking App**<br>
+**Appunta — Expiry Tracking & SMS Booking App**<br>
 Copyright (C) 2026 Adrian Petcu — Volt Academy
 
 This program is free software: you can redistribute it and/or modify

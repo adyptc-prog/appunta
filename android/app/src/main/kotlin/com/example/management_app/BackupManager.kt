@@ -11,7 +11,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Backup / restore al datelor Organizator (vezi BackupFormat) într-un singur
+ * Backup / restore al datelor Appunta (vezi BackupFormat) într-un singur
  * folder ales de utilizator prin Storage Access Framework — pe stick-ul USB
  * sau în memoria telefonului. Același folder e folosit și de backup-ul
  * automat zilnic (OrganizatorBackupWorker).

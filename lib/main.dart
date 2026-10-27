@@ -1216,7 +1216,7 @@ class ManagementApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      title: 'Organizator',
+      title: 'Appunta',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -1287,7 +1287,7 @@ class _ManagementPageState extends State<ManagementPage>
   // (Scaffold-ul cu spinner se construiește imediat) — nu explodăm în acel caz.
   Board get _activeBoard => _boards.firstWhere(
       (b) => b.id == _activeBoardId,
-      orElse: () => const Board(id: '', name: 'Organizator'));
+      orElse: () => const Board(id: '', name: 'Appunta'));
   int get _activeBoardIndex => _boards.indexWhere((b) => b.id == _activeBoardId);
 
   @override
@@ -2249,7 +2249,7 @@ class _ManagementPageState extends State<ManagementPage>
               ),
               const SizedBox(height: 12),
               Text(
-                tr('Cumpără o licență pe voltacademy.app/organizator.html folosind codul de instalare de mai jos, apoi importă fișierul descărcat:', 'Buy a license at voltacademy.app/organizator.html using the installation code below, then import the downloaded file:'),
+                tr('Cumpără o licență pe voltacademy.app/appunta.html folosind codul de instalare de mai jos, apoi importă fișierul descărcat:', 'Buy a license at voltacademy.app/appunta.html using the installation code below, then import the downloaded file:'),
                 style: TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 8),
@@ -4152,7 +4152,7 @@ class _ManagementPageState extends State<ManagementPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Organizator',
+              const Text('Appunta',
                   style: TextStyle(fontSize: 12, color: Colors.white70)),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -5041,7 +5041,7 @@ class _ManagementPageState extends State<ManagementPage>
             onPressed: () {
               final text = buildExportText(
                   all, period, activeItems.length, deletedItems.length);
-              Share.share(text, subject: tr('Raport Organizator', 'Organizator report'));
+              Share.share(text, subject: tr('Raport Appunta', 'Appunta report'));
             },
           ),
           FilledButton(

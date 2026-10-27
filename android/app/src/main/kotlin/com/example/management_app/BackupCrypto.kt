@@ -90,7 +90,7 @@ object BackupCrypto {
 
     /** Textul backup-ului v1 din interior; [WrongPasswordException] la parolă greșită. */
     fun decrypt(content: String, password: String): String {
-        val invalid = BackupFormat.InvalidBackupException(tr("Fișierul nu este un backup Organizator valid.", "The file is not a valid Organizator backup."))
+        val invalid = BackupFormat.InvalidBackupException(tr("Fișierul nu este un backup Appunta valid.", "The file is not a valid Appunta backup."))
         val root = try { JSONObject(content) } catch (_: Exception) { throw invalid }
         if (root.optString("app") != BackupFormat.APP_ID ||
             root.optInt("formatVersion", -1) != FORMAT_VERSION

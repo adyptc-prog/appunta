@@ -144,7 +144,7 @@ class MainActivity : FlutterActivity() {
                             ?: run { result.error("ARG", "missing id", null); return@setMethodCallHandler }
                         val triggerAtMs = call.argument<Long>("triggerAtMs")
                             ?: run { result.error("ARG", "missing triggerAtMs", null); return@setMethodCallHandler }
-                        val title       = call.argument<String>("title") ?: "Organizator"
+                        val title       = call.argument<String>("title") ?: "Appunta"
                         val body        = call.argument<String>("body")  ?: ""
                         scheduleNotifAlarm(id, triggerAtMs, title, body)
                         result.success(null)

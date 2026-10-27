@@ -61,7 +61,7 @@ void main() {
       await tester.pumpWidget(const ManagementApp());
       await tester.pumpAndSettle();
 
-      expect(find.text('Organizator'), findsOneWidget);
+      expect(find.text('Appunta'), findsOneWidget);
       expect(find.text('No.'), findsOneWidget);
       expect(find.text('Name'), findsOneWidget);
       expect(find.text('Description'), findsOneWidget);

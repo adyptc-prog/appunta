@@ -238,13 +238,13 @@ class _LicenseScreenState extends State<LicenseScreen> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                tr('Cumpără o licență pe voltacademy.app/organizator.html folosind '
+                tr('Cumpără o licență pe voltacademy.app/appunta.html folosind '
                 'codul de instalare de mai sus, apoi selectează fișierul '
                 'descărcat.\n\n'
                 'Licența e valabilă pe două telefoane: configurează '
                 'sincronizarea între ele și licența se transferă automat '
                 'prin SMS pe al doilea telefon.',
-                'Buy a license at voltacademy.app/organizator.html using '
+                'Buy a license at voltacademy.app/appunta.html using '
                 'the installation code above, then select the downloaded '
                 'file.\n\n'
                 'The license is valid on two phones: set up '
