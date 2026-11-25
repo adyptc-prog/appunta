@@ -29,6 +29,9 @@ object SmsSender {
     internal var testSink: ((phone: String, message: String) -> Unit)? = null
 
     fun send(context: Context, phone: String, message: String) {
+        // Ultima protecție: un „număr” fără cifre (gol, "null", text) nu
+        // e trimis — altfel apare la utilizator ca SMS eșuat către „null”.
+        if (phone.none { it.isDigit() }) return
         testSink?.let { it(phone, message); return }
         val app = context.applicationContext
         try {

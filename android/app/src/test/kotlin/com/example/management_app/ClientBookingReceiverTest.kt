@@ -210,25 +210,26 @@ class ClientBookingReceiverTest {
         context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).edit()
             .putLong("flutter.alert_lead_minutes_b1", 15L).commit()
         receiver.handleMessage(context, client, "liber")
-        receiver.handleMessage(context, client, "1")
+        receiver.handleMessage(context, client, "2") // începe peste ≥ 30 min
         val msg = JSONArray(SmsSyncReceiver.snapshot(context)).getJSONObject(0).getString("msg")
         val j = JSONObject(msg.removePrefix("ORG:A:"))
         val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
-        val end = LocalDateTime.parse(j.getString("e"), fmt)
-        assertEquals(end.minusMinutes(15).format(fmt), j.getString("w"))
+        // Alerta se socotește față de ora programării (începutul, „c”).
+        val start = LocalDateTime.parse(j.getString("c"), fmt)
+        assertEquals(start.minusMinutes(15).format(fmt), j.getString("w"))
     }
 
     @Test
     fun `fara interval salvat alerta e cu o ora inainte, iar una trecuta lipseste`() {
         assertEquals(60, BookingSettings.loadAlertLeadMin(context, "b1"))
-        // Durata 30 min, alerta cu 60 min înainte de final: pentru primul slot
+        // Alerta cu 60 min înainte de începutul programării: pentru primul slot
         // liber momentul a trecut deja — nu se trimite o alertă inutilă.
         receiver.handleMessage(context, client, "liber")
         receiver.handleMessage(context, client, "1")
         val msg = JSONArray(SmsSyncReceiver.snapshot(context)).getJSONObject(0).getString("msg")
         val j = JSONObject(msg.removePrefix("ORG:A:"))
-        val end = LocalDateTime.parse(j.getString("e"), DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
-        if (end.minusMinutes(60).isAfter(LocalDateTime.now())) assertTrue(j.has("w"))
+        val start = LocalDateTime.parse(j.getString("c"), DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+        if (start.minusMinutes(60).isAfter(LocalDateTime.now())) assertTrue(j.has("w"))
         else assertFalse(j.has("w"))
     }
 

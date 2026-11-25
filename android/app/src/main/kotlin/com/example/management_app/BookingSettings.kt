@@ -74,7 +74,8 @@ object BookingSettings {
         val hoursStr = p.getString("flutter.work_hours_$boardId", null)
         val result = BoardBookingSettings(
             enabled = p.getBoolean("flutter.booking_enabled_$boardId", false),
-            durationMin = getIntCompat(p, "flutter.appointment_duration_$boardId", 30),
+            // Sub 5 min (rămasă dintr-o versiune veche) → 30, ca în Dart.
+            durationMin = getIntCompat(p, "flutter.appointment_duration_$boardId", 30).let { if (it < 5) 30 else it },
             workHours = if (hoursStr != null) parseWorkHours(hoursStr) else legacyWorkHours(p, boardId),
         )
         Diag.i("loadSettings: boardId=$boardId -> $result")
@@ -202,9 +203,9 @@ object BookingSettings {
                     val syncId = o.optString("syncId", "")
                     if (syncId.isEmpty()) continue
                     val phones = listOfNotNull(
-                        o.optString("phoneNumber", "").takeIf { it.isNotEmpty() },
-                        o.optString("phoneNumber2", "").takeIf { it.isNotEmpty() },
-                        o.optString("phoneNumber3", "").takeIf { it.isNotEmpty() },
+                        o.optString("phoneNumber", "").takeIf { it.isNotEmpty() && it != "null" },
+                        o.optString("phoneNumber2", "").takeIf { it.isNotEmpty() && it != "null" },
+                        o.optString("phoneNumber3", "").takeIf { it.isNotEmpty() && it != "null" },
                     )
                     if (phones.isEmpty()) continue
                     val expiresStr = o.optString("expiresAt", "")

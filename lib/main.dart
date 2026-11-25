@@ -18,6 +18,7 @@ import 'l10n.dart';
 import 'license_screen.dart';
 import 'license_service.dart';
 import 'no_show.dart';
+import 'phone_check.dart';
 import 'services.dart';
 
 // ─── Constante ───────────────────────────────────────────────────────────────
@@ -89,9 +90,15 @@ String formatAlertLead(int minutes) {
 
 // Identice cu DEFAULT_TEMPLATE_RO / DEFAULT_TEMPLATE_EN din BotReminders.kt.
 const _kDefaultSmsTemplateRo =
-    'Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare.';
+    'Bună, [NUME]! Îți reamintim de programarea de pe [DATA_PROGRAMARE]. Te așteptăm!';
 const _kDefaultSmsTemplateEn =
-    'Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps.';
+    'Hi [NAME]! A reminder of your appointment on [APPOINTMENT_DATE]. See you then!';
+// Mesajele implicite vechi (ora era „expirarea”) — salvate neschimbate, sunt
+// tratate tot ca implicite, deci primesc automat textul nou.
+const _kLegacySmsTemplates = {
+  'Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare.',
+  'Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps.',
+};
 
 // Mesajul implicit urmează limba aplicației. Un mesaj salvat identic cu unul
 // din cele implicite e tratat tot ca implicit; unul editat de utilizator
@@ -103,7 +110,8 @@ String _effectiveSmsTemplate(String? saved) =>
     (saved == null ||
             saved.trim().isEmpty ||
             saved == _kDefaultSmsTemplateRo ||
-            saved == _kDefaultSmsTemplateEn)
+            saved == _kDefaultSmsTemplateEn ||
+            _kLegacySmsTemplates.contains(saved))
         ? _defaultSmsTemplate
         : saved;
 
@@ -182,7 +190,8 @@ class NotificationService {
   // ID-urile alarmelor includ indexul tabelului (0..9) ca să nu se
   // suprapună între tabele diferite — pentru tabelul 0 (primul, migrat din
   // versiunea cu un singur tabel) formula rămâne identică cu cea veche.
-  static Future<void> scheduleFor(Item item, {required int boardIndex}) async {
+  static Future<void> scheduleFor(Item item,
+      {required int boardIndex, int defaultDurationMin = 30}) async {
     if (!_isAndroid) return;
     await cancelFor(item.number, boardIndex: boardIndex);
     final now  = DateTime.now();
@@ -195,7 +204,7 @@ class NotificationService {
         id: base + item.number * 10 + 1,
         when: item.warningAt!,
         title: tr('⚠️ Alertă: ${item.name}', '⚠️ Alert: ${item.name}'),
-        body: tr('Va expira la ${_fmt(item.expiresAt!)}', 'It expires on ${_fmt(item.expiresAt!)}'),
+        body: tr('Programare la ${_fmt(item.startOr(defaultDurationMin)!)}', 'Appointment at ${_fmt(item.startOr(defaultDurationMin)!)}'),
       );
     }
     if (item.expiresAt != null && item.expiresAt!.isAfter(now)) {
@@ -337,7 +346,7 @@ class SmsService {
   }
 
   static Future<void> scheduleFor(Item item,
-      {String? template, required int boardIndex}) async {
+      {String? template, required int boardIndex, int defaultDurationMin = 30}) async {
     final tpl = _effectiveSmsTemplate(template);
     if (!isAndroid) return;
     // Așteptăm anularea: altfel ștergerea payload-ului vechi (sms_alarm_<id>)
@@ -348,9 +357,13 @@ class SmsService {
 
     final now       = DateTime.now();
     final expiryStr = item.expiresAt != null ? _fmt(item.expiresAt!) : tr('nesetată', 'not set');
+    final start = item.startOr(defaultDurationMin);
+    final startStr = start != null ? _fmt(start) : tr('nesetată', 'not set');
     String buildMsg(String tmpl) => tmpl
         .replaceAll('[NUME]', item.name)
         .replaceAll('[NAME]', item.name)
+        .replaceAll('[DATA_PROGRAMARE]', startStr)
+        .replaceAll('[APPOINTMENT_DATE]', startStr)
         .replaceAll('[DATA_EXPIRARE]', expiryStr)
         .replaceAll('[EXPIRY_DATE]', expiryStr);
 
@@ -362,14 +375,9 @@ class SmsService {
             message: buildMsg(tpl));
       }
     }
-    if (!item.viaBot && item.expiresAt != null && item.expiresAt!.isAfter(now)) {
-      final ids = _expIds(item.number, boardIndex);
-      for (var i = 0; i < phones.length && i < ids.length; i++) {
-        await _schedule(
-            id: ids[i], when: item.expiresAt!, phone: phones[i],
-            message: tr('EXPIRAT: ${buildMsg(tpl)}', 'EXPIRED: ${buildMsg(tpl)}'));
-      }
-    }
+    // Fără SMS „EXPIRAT” la sfârșitul programării: telefoanele sunt ale
+    // clienților, care primesc doar reminderul dinainte (id-urile _expIds
+    // rămân doar ca să fie anulate alarmele vechi).
   }
 
   static Future<void> cancelFor(int number, {required int boardIndex}) async {
@@ -687,8 +695,10 @@ class Item {
   // „Nu a venit” pus automat (neconfirmată în 24h), nu de salon.
   final bool attendanceAuto;
   // Serviciul programării (din ecranul „Servicii”) și durata lui, în minute.
-  // Programarea ocupă [expiresAt − durationMin, expiresAt]; fără durată
-  // (programări vechi) se folosește durata implicită a tabelului.
+  // Programarea ocupă [expiresAt − durationMin, expiresAt]: în date se
+  // păstrează ora de sfârșit (compatibil cu botul, sincronizarea și
+  // backup-urile), dar utilizatorul alege și vede ora de ÎNCEPUT — vezi
+  // [startOr]. Fără durată (programări vechi) se folosește cea a tabelului.
   final String? service;
   final int? durationMin;
 
@@ -713,6 +723,10 @@ class Item {
   /// Durata programării — a ei sau, dacă nu o are, [defaultMin] (tabelul).
   int durationOr(int defaultMin) =>
       durationMin != null && durationMin! > 0 ? durationMin! : defaultMin;
+
+  /// Ora programării (începutul): sfârșitul minus durată.
+  DateTime? startOr(int defaultMin) =>
+      expiresAt?.subtract(Duration(minutes: durationOr(defaultMin)));
 
   // Telefonul după care e recunoscut clientul (neprezentări).
   String? get clientPhone =>
@@ -764,7 +778,7 @@ class Item {
           ? false
           : (attendanceAuto ?? (attendance != null ? false : this.attendanceAuto)),
       service:      clearService ? null : (service ?? this.service),
-      durationMin:  clearService ? null : (durationMin ?? this.durationMin),
+      durationMin:  durationMin ?? (clearService ? null : this.durationMin),
     );
   }
 
@@ -986,14 +1000,21 @@ Map<int, DayHours> _legacyWorkHours(SharedPreferences prefs, String boardId) {
   };
 }
 
+/// Durata implicită salvată; una sub minimul permis (ex. 3 min, rămasă dintr-o
+/// versiune veche) sau lipsă → 30 min.
+int sanitizeDefaultDuration(int? saved) =>
+    saved == null || saved < kMinServiceDuration
+        ? BookingSettingsData.defaults.durationMin
+        : saved;
+
 Future<BookingSettingsData> _loadBookingSettings(
     SharedPreferences prefs, String boardId) async {
   final hoursStr = prefs.getString(_workHoursKeyFor(boardId));
   return BookingSettingsData(
     enabled: prefs.getBool(_bookingEnabledKeyFor(boardId)) ??
         BookingSettingsData.defaults.enabled,
-    durationMin: prefs.getInt(_appointmentDurationKeyFor(boardId)) ??
-        BookingSettingsData.defaults.durationMin,
+    durationMin: sanitizeDefaultDuration(
+        prefs.getInt(_appointmentDurationKeyFor(boardId))),
     workHours: hoursStr != null
         ? parseWorkHours(hoursStr)
         : _legacyWorkHours(prefs, boardId),
@@ -2025,6 +2046,9 @@ class _ManagementPageState extends State<ManagementPage>
     }
 
     final alertLeadMin = _loadAlertLead(prefs, boardId);
+    final boardDuration = boardId == _activeBoardId
+        ? _bookingSettings.durationMin
+        : (await _loadBookingSettings(prefs, boardId)).durationMin;
     bool changed = false;
     final removed = <Item>[];
     final becameNoShow = <Item>[];
@@ -2042,7 +2066,7 @@ class _ManagementPageState extends State<ManagementPage>
           // Rezervare prin bot fără alertă (scrisă de o versiune care nu o
           // calcula nativ) — primește intervalul implicit al tabelului.
           if (incoming.viaBot && incoming.warningAt == null) {
-            final w = autoWarningFor(incoming.expiresAt, alertLeadMin);
+            final w = autoWarningFor(incoming.startOr(boardDuration), alertLeadMin);
             if (w != null) incoming = incoming.copyWith(warningAt: w);
           }
           final idx = items.indexWhere((e) => e.syncId == incoming.syncId);
@@ -2119,9 +2143,12 @@ class _ManagementPageState extends State<ManagementPage>
 
     // Reprogramează notificările locale pentru toate înregistrările tabelului
     for (final item in items) {
-      await NotificationService.scheduleFor(item, boardIndex: boardIndex);
+      await NotificationService.scheduleFor(item,
+          boardIndex: boardIndex, defaultDurationMin: boardDuration);
       await SmsService.scheduleFor(item,
-          template: _smsTemplate, boardIndex: boardIndex);
+          template: _smsTemplate,
+          boardIndex: boardIndex,
+          defaultDurationMin: boardDuration);
     }
 
     if (isActiveBoard) {
@@ -2330,7 +2357,7 @@ class _ManagementPageState extends State<ManagementPage>
           item.description.toLowerCase().contains(q) ||
           (item.service?.toLowerCase().contains(q) ?? false) ||
           _formatDateTime(item.createdAt).contains(q) ||
-          (item.expiresAt != null && _formatDateTime(item.expiresAt!).contains(q));
+          (item.expiresAt != null && _formatDateTime(_startOf(item)!).contains(q));
     }).toList();
 
     result.sort((a, b) {
@@ -2648,15 +2675,70 @@ class _ManagementPageState extends State<ManagementPage>
   // ── Dialog adăugare / editare ────────────────────────────────────────────────
   // La mutarea unei programări, alerta se mută odată cu ea, cu același
   // interval înainte de expirare — altfel ar pleca la ora veche.
-  DateTime? _shiftedWarning(Item item, DateTime? newExpiry) {
+  DateTime? _shiftedWarning(Item item, DateTime? newStart) {
     final oldWarning = item.warningAt;
-    final oldExpiry  = item.expiresAt;
-    if (oldWarning == null || oldExpiry == null || newExpiry == null ||
-        newExpiry == oldExpiry) {
+    final oldStart   = _startOf(item);
+    if (oldWarning == null || oldStart == null || newStart == null ||
+        newStart == oldStart) {
       return oldWarning;
     }
     return autoWarningFor(
-        newExpiry, oldExpiry.difference(oldWarning).inMinutes);
+        newStart, oldStart.difference(oldWarning).inMinutes);
+  }
+
+  /// Ora programării (începutul), cu durata implicită a tabelului activ.
+  DateTime? _startOf(Item item) => item.startOr(_bookingSettings.durationMin);
+
+  /// Programările din tabel care se suprapun cu intervalul
+  /// [start, start + durationMin].
+  List<Item> _overlappingItems(DateTime start, int durationMin,
+      {int? excludeNumber}) {
+    final end = start.add(Duration(minutes: durationMin));
+    return _items.where((e) {
+      if (e.number == excludeNumber || e.expiresAt == null) return false;
+      final otherEnd = e.expiresAt!;
+      final otherStart = otherEnd.subtract(
+          Duration(minutes: e.durationOr(_bookingSettings.durationMin)));
+      return start.isBefore(otherEnd) && otherStart.isBefore(end);
+    }).toList();
+  }
+
+  /// Avertizare pentru o oră în trecut sau suprapusă; true = salvează.
+  Future<bool> _confirmScheduleWarnings(BuildContext ctx,
+      {required DateTime start,
+      required int durationMin,
+      int? excludeNumber}) async {
+    final warnings = <String>[];
+    if (start.isBefore(DateTime.now())) {
+      warnings.add(tr('Ora aleasă a trecut deja.', 'The chosen time has already passed.'));
+    }
+    final overlaps =
+        _overlappingItems(start, durationMin, excludeNumber: excludeNumber);
+    if (overlaps.isNotEmpty) {
+      final names = overlaps
+          .map((e) => '${e.name} (${_formatDateTime(_startOf(e)!)})')
+          .join(', ');
+      warnings.add(tr('Se suprapune cu: $names.', 'Overlaps with: $names.'));
+    }
+    if (warnings.isEmpty) return true;
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (c) => AlertDialog(
+        title: Text(tr('Verifică ora', 'Check the time')),
+        content: Text(warnings.join('\n\n')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text(tr('Înapoi', 'Back')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(tr('Salvează oricum', 'Save anyway')),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
   }
 
   Future<void> _showItemDialog({Item? existing}) async {
@@ -2668,7 +2750,10 @@ class _ManagementPageState extends State<ManagementPage>
     }
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final descCtrl = TextEditingController(text: existing?.description ?? '');
-    DateTime? selectedExpiry = existing?.expiresAt;
+    // Utilizatorul alege ora de ÎNCEPUT; sfârșitul (salvat ca expiresAt)
+    // = început + durata serviciului.
+    DateTime? selectedStart = existing == null ? null : _startOf(existing);
+    String? nameError;
     // Serviciul programării — dintre cele ale tabelului; unul șters între
     // timp din listă rămâne selectat la editare.
     SalonService? selectedService = existing?.service == null
@@ -2696,7 +2781,9 @@ class _ManagementPageState extends State<ManagementPage>
                   TextField(
                     controller: nameCtrl,
                     decoration: InputDecoration(
-                        labelText: tr('Nume *', 'Name *'), border: OutlineInputBorder()),
+                        labelText: tr('Nume *', 'Name *'),
+                        errorText: nameError,
+                        border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -2732,43 +2819,43 @@ class _ManagementPageState extends State<ManagementPage>
                   ],
                   const SizedBox(height: 12),
                   _buildDatePickerRow(
-                    label: selectedExpiry == null
-                        ? tr('Data expirare: nesetată', 'Expiry date: not set')
-                        : tr('Expirare: ${_formatDateTime(selectedExpiry!)}', 'Expiry: ${_formatDateTime(selectedExpiry!)}'),
-                    hasValue: selectedExpiry != null,
-                    onClear: () => setDs(() => selectedExpiry = null),
+                    label: selectedStart == null
+                        ? tr('Ora programării: nesetată', 'Appointment time: not set')
+                        : tr('Programare: ${_formatDateTime(selectedStart!)}', 'Appointment: ${_formatDateTime(selectedStart!)}'),
+                    hasValue: selectedStart != null,
+                    onClear: () => setDs(() => selectedStart = null),
                     onPick: () async {
                       final date = await showDatePicker(
                         context: ctx,
-                        initialDate: selectedExpiry ?? DateTime.now(),
+                        initialDate: selectedStart ?? DateTime.now(),
                         firstDate: DateTime(2020), lastDate: DateTime(2100),
                       );
                       if (date == null) return;
                       if (!ctx.mounted) return;
                       final time = await showTimePicker(
                         context: ctx,
-                        initialTime: selectedExpiry != null
+                        initialTime: selectedStart != null
                             ? TimeOfDay(
-                                hour: selectedExpiry!.hour,
-                                minute: selectedExpiry!.minute)
+                                hour: selectedStart!.hour,
+                                minute: selectedStart!.minute)
                             : TimeOfDay.now(),
                       );
                       if (time == null) return;
-                      setDs(() => selectedExpiry = DateTime(
+                      setDs(() => selectedStart = DateTime(
                           date.year, date.month, date.day,
                           time.hour, time.minute));
                     },
                   ),
-                  if (selectedExpiry != null)
+                  if (selectedStart != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
                         tr('Ocupă intervalul '
-                        '${_formatTime(selectedExpiry!.subtract(Duration(minutes: selectedService?.durationMin ?? _bookingSettings.durationMin)))}'
-                        '–${_formatTime(selectedExpiry!)}',
+                        '${_formatTime(selectedStart!)}'
+                        '–${_formatTime(selectedStart!.add(Duration(minutes: selectedService?.durationMin ?? _bookingSettings.durationMin)))}',
                         'Takes the slot '
-                        '${_formatTime(selectedExpiry!.subtract(Duration(minutes: selectedService?.durationMin ?? _bookingSettings.durationMin)))}'
-                        '–${_formatTime(selectedExpiry!)}'),
+                        '${_formatTime(selectedStart!)}'
+                        '–${_formatTime(selectedStart!.add(Duration(minutes: selectedService?.durationMin ?? _bookingSettings.durationMin)))}'),
                         style: TextStyle(
                             fontSize: 12, color: Colors.grey.shade700),
                       ),
@@ -2783,10 +2870,32 @@ class _ManagementPageState extends State<ManagementPage>
               child: Text(tr('Anulează', 'Cancel')),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = nameCtrl.text.trim();
                 final desc = descCtrl.text.trim();
-                if (name.isEmpty) return;
+                if (name.isEmpty) {
+                  setDs(() => nameError =
+                      tr('Introdu numele.', 'Enter the name.'));
+                  return;
+                }
+                // Durata e salvată mereu pe programare, ca intervalul să nu
+                // se schimbe dacă salonul modifică ulterior durata implicită.
+                final duration = selectedService?.durationMin ??
+                    _bookingSettings.durationMin;
+                final selectedExpiry =
+                    selectedStart?.add(Duration(minutes: duration));
+                // Ora schimbată (sau programare nouă): avertizează la trecut
+                // și la suprapuneri, dar lasă utilizatorul să decidă.
+                if (selectedStart != null &&
+                    selectedExpiry != existing?.expiresAt) {
+                  final ok = await _confirmScheduleWarnings(
+                    ctx,
+                    start: selectedStart!,
+                    durationMin: duration,
+                    excludeNumber: existing?.number,
+                  );
+                  if (!ok || !ctx.mounted) return;
+                }
                 setState(() {
                   if (isEdit) {
                     final idx =
@@ -2797,13 +2906,13 @@ class _ManagementPageState extends State<ManagementPage>
                         description: desc,
                         expiresAt: selectedExpiry,
                         clearExpiry: selectedExpiry == null,
-                        warningAt: _shiftedWarning(existing, selectedExpiry),
+                        warningAt: _shiftedWarning(existing, selectedStart),
                         clearWarning:
-                            _shiftedWarning(existing, selectedExpiry) == null,
+                            _shiftedWarning(existing, selectedStart) == null,
                         // Mutată la altă oră: prezența se confirmă din nou.
                         clearAttendance: selectedExpiry != existing.expiresAt,
                         service: selectedService?.name,
-                        durationMin: selectedService?.durationMin,
+                        durationMin: duration,
                         clearService: selectedService == null,
                       );
                     }
@@ -2816,9 +2925,9 @@ class _ManagementPageState extends State<ManagementPage>
                       createdAt:   DateTime.now(),
                       expiresAt:   selectedExpiry,
                       warningAt:
-                          autoWarningFor(selectedExpiry, _alertLeadMin),
+                          autoWarningFor(selectedStart, _alertLeadMin),
                       service:     selectedService?.name,
-                      durationMin: selectedService?.durationMin,
+                      durationMin: duration,
                     ));
                   }
                 });
@@ -2837,16 +2946,20 @@ class _ManagementPageState extends State<ManagementPage>
         changedItem = _items.firstWhere(
             (e) => e.number == existing.number, orElse: () => existing);
         await NotificationService.scheduleFor(changedItem,
-            boardIndex: _activeBoardIndex);
+            boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
         await SmsService.scheduleFor(changedItem,
-            template: _smsTemplate, boardIndex: _activeBoardIndex);
+            template: _smsTemplate, boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
         await SyncService.sendUpdate(changedItem);
       } else if (_items.isNotEmpty) {
         changedItem = _items.reduce((a, b) => a.number > b.number ? a : b);
         await NotificationService.scheduleFor(changedItem,
-            boardIndex: _activeBoardIndex);
+            boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
         await SmsService.scheduleFor(changedItem,
-            template: _smsTemplate, boardIndex: _activeBoardIndex);
+            template: _smsTemplate, boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
         await SyncService.sendAdd(changedItem);
       }
       await _saveItems();
@@ -2860,7 +2973,8 @@ class _ManagementPageState extends State<ManagementPage>
       (int.tryParse(minutes.text.trim()) ?? 0);
 
   Future<void> _showWarningDialog(Item item) async {
-    final expiresAt = item.expiresAt;
+    // Alerta se socotește față de ora programării (începutul).
+    final expiresAt = _startOf(item);
     const presets = [15, 30, 60, 120, 1440];
     // Modul alertei: cu un interval înainte de expirare (implicit), la o
     // oră exactă aleasă din calendar, sau deloc.
@@ -2910,7 +3024,7 @@ class _ManagementPageState extends State<ManagementPage>
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        tr('Expiră la: ${_formatDateTime(item.expiresAt!)}', 'Expires at: ${_formatDateTime(item.expiresAt!)}'),
+                        tr('Programare: ${_formatDateTime(_startOf(item)!)}', 'Appointment: ${_formatDateTime(_startOf(item)!)}'),
                         style: TextStyle(
                             fontSize: 12, color: Colors.grey.shade600),
                       ),
@@ -3115,10 +3229,18 @@ class _ManagementPageState extends State<ManagementPage>
             FilledButton(
               onPressed: () {
                 if (mode == _AlertMode.lead && leadMin <= 0) return;
+                // Un număr invalid nu se salvează: SMS-ul ar eșua (câmpul
+                // își arată singur eroarea).
+                final phones = [phone1Ctrl, phone2Ctrl, phone3Ctrl];
+                if (phones.any((c) =>
+                    c.text.trim().isNotEmpty && !isPlausiblePhone(c.text))) {
+                  setDs(() {});
+                  return;
+                }
                 final warning = effectiveWarning();
-                final p1  = phone1Ctrl.text.trim();
-                final p2  = phone2Ctrl.text.trim();
-                final p3  = phone3Ctrl.text.trim();
+                final p1  = normalizePhoneInput(phone1Ctrl.text);
+                final p2  = normalizePhoneInput(phone2Ctrl.text);
+                final p3  = normalizePhoneInput(phone3Ctrl.text);
                 final idx = _items.indexWhere((e) => e.number == item.number);
                 if (idx != -1) {
                   setState(() {
@@ -3151,9 +3273,11 @@ class _ManagementPageState extends State<ManagementPage>
       final updated = _items.firstWhere(
           (e) => e.number == item.number, orElse: () => item);
       await NotificationService.scheduleFor(updated,
-          boardIndex: _activeBoardIndex);
+          boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
       await SmsService.scheduleFor(updated,
-          template: _smsTemplate, boardIndex: _activeBoardIndex);
+          template: _smsTemplate, boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
       await SyncService.sendUpdate(updated);
       await _saveItems();
     }
@@ -3211,9 +3335,11 @@ class _ManagementPageState extends State<ManagementPage>
         final newItem =
             _items.firstWhere((e) => e.syncId == oldItem.syncId);
         await NotificationService.scheduleFor(newItem,
-            boardIndex: _activeBoardIndex);
+            boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
         await SmsService.scheduleFor(newItem,
-            template: _smsTemplate, boardIndex: _activeBoardIndex);
+            template: _smsTemplate, boardIndex: _activeBoardIndex,
+            defaultDurationMin: _bookingSettings.durationMin);
       }
 
       await SyncService.sendDelete(syncId);
@@ -3499,6 +3625,7 @@ class _ManagementPageState extends State<ManagementPage>
         TextEditingController(text: SyncService.partnerPhone ?? '');
     final codeCtrl = TextEditingController();
     String? codeError;
+    String? phoneError;
 
     await showDialog<void>(
       context: context,
@@ -3567,6 +3694,7 @@ class _ManagementPageState extends State<ManagementPage>
                       decoration: InputDecoration(
                         labelText: tr('Număr telefon partener *', 'Partner phone number *'),
                         hintText: '+40712345678',
+                        errorText: phoneError,
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
@@ -3647,8 +3775,14 @@ class _ManagementPageState extends State<ManagementPage>
                 icon: const Icon(Icons.sync, size: 18),
                 label: Text(tr('Sincronizează', 'Sync')),
                 onPressed: () async {
-                  final phone = phoneCtrl.text.trim();
-                  if (phone.isEmpty) return;
+                  final phone = normalizePhoneInput(phoneCtrl.text);
+                  if (!isPlausiblePhone(phone)) {
+                    setDs(() => phoneError = phone.isEmpty
+                        ? tr('Introdu numărul telefonului partener.', 'Enter the partner phone number.')
+                        : tr('Număr de telefon invalid.', 'Invalid phone number.'));
+                    return;
+                  }
+                  setDs(() => phoneError = null);
                   if (!SyncService.isValidCode(codeCtrl.text)) {
                     setDs(() => codeError =
                         tr('Minim ${SyncService.minCodeLength} litere/cifre.', 'At least ${SyncService.minCodeLength} letters/digits.'));
@@ -3853,7 +3987,7 @@ class _ManagementPageState extends State<ManagementPage>
                           ListTile(
                             contentPadding: EdgeInsets.zero,
                             title: Text(item.name),
-                            subtitle: Text(_formatDateTime(item.expiresAt!)),
+                            subtitle: Text(_formatDateTime(_startOf(item)!)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -3926,9 +4060,9 @@ class _ManagementPageState extends State<ManagementPage>
               _detailRow(tr('Creat la', 'Created'), _formatDateTime(item.createdAt)),
               const SizedBox(height: 10),
               _detailRow(
-                tr('Expiră la', 'Expires at'),
+                tr('Programare', 'Appointment'),
                 item.expiresAt != null
-                    ? _formatDateTime(item.expiresAt!)
+                    ? '${_formatDateTime(_startOf(item)!)}–${_formatTime(item.expiresAt!)}'
                     : tr('Nesetată', 'Not set'),
                 valueColor: _isExpired(item) ? Colors.red.shade700 : null,
               ),
@@ -4469,7 +4603,7 @@ class _ManagementPageState extends State<ManagementPage>
                                           _buildHeaderCell(tr('Nume', 'Name'),      SortColumn.name,        width: 160),
                                           _buildHeaderCell(tr('Descriere', 'Description'), SortColumn.description, width: 200),
                                           _buildHeaderCell(tr('Creat la', 'Created'),  SortColumn.createdAt,   width: 155),
-                                          _buildHeaderCell(tr('Expiră la', 'Expires at'), SortColumn.expiresAt,   width: 155),
+                                          _buildHeaderCell(tr('Ora programării', 'Appointment'), SortColumn.expiresAt,   width: 155),
                                           SizedBox(width: _actionColWidth),
                                         ],
                                       ),
@@ -4509,7 +4643,7 @@ class _ManagementPageState extends State<ManagementPage>
                                                         _dataCell(_formatDateTime(item.createdAt), width: 155, expired: expired),
                                                         _dataCell(
                                                           item.expiresAt != null
-                                                              ? _formatDateTime(item.expiresAt!)
+                                                              ? _formatDateTime(_startOf(item)!)
                                                               : tr('Nesetată', 'Not set'),
                                                           width: 155,
                                                           expired: expired,
@@ -4766,7 +4900,7 @@ class _ManagementPageState extends State<ManagementPage>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(tr('Selectează perioada de expirare:', 'Select the expiry period:'),
+                  Text(tr('Selectează perioada programărilor:', 'Select the appointment period:'),
                       style: TextStyle(fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 12),
                   _buildDatePickerRow(
@@ -4863,7 +4997,7 @@ class _ManagementPageState extends State<ManagementPage>
         buf.writeln('');
         final del = e.deletedAt != null ? tr(' [ȘTERS]', ' [DELETED]') : '';
         buf.writeln('• ${e.item.name}$del');
-        buf.writeln(tr('  Expiră  : ${e.item.expiresAt != null ? _formatDateTime(e.item.expiresAt!) : "nesetată"}', '  Expires : ${e.item.expiresAt != null ? _formatDateTime(e.item.expiresAt!) : "not set"}'));
+        buf.writeln(tr('  Programare: ${e.item.expiresAt != null ? _formatDateTime(_startOf(e.item)!) : "nesetată"}', '  Appointment: ${e.item.expiresAt != null ? _formatDateTime(_startOf(e.item)!) : "not set"}'));
         if (e.deletedAt != null) {
           buf.writeln(tr('  Șters la: ${_formatDateTime(e.deletedAt!)}', '  Deleted : ${_formatDateTime(e.deletedAt!)}'));
         }
@@ -5005,8 +5139,8 @@ class _ManagementPageState extends State<ManagementPage>
                                   ),
                                   Text(
                                     item.expiresAt != null
-                                        ? tr('Expiră: ${_formatDateTime(item.expiresAt!)}', 'Expires: ${_formatDateTime(item.expiresAt!)}')
-                                        : tr('Fără dată de expirare', 'No expiry date'),
+                                        ? tr('Programare: ${_formatDateTime(_startOf(item)!)}', 'Appointment: ${_formatDateTime(_startOf(item)!)}')
+                                        : tr('Fără oră de programare', 'No appointment time'),
                                     style: TextStyle(
                                         fontSize: 12,
                                         color: isDeleted
@@ -5037,7 +5171,7 @@ class _ManagementPageState extends State<ManagementPage>
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.share_outlined, size: 18),
-            label: const Text('Share'),
+            label: Text(tr('Trimite', 'Share')),
             onPressed: () {
               final text = buildExportText(
                   all, period, activeItems.length, deletedItems.length);
@@ -5059,6 +5193,9 @@ class _ManagementPageState extends State<ManagementPage>
     final prefs = await SharedPreferences.getInstance();
     for (var boardIndex = 0; boardIndex < _boards.length; boardIndex++) {
       final boardId = _boards[boardIndex].id;
+      final boardDuration = boardId == _activeBoardId
+          ? _bookingSettings.durationMin
+          : (await _loadBookingSettings(prefs, boardId)).durationMin;
       final List<Item> items;
       if (boardId == _activeBoardId) {
         items = _items;
@@ -5076,7 +5213,9 @@ class _ManagementPageState extends State<ManagementPage>
       for (final item in items) {
         if (item.phones.isEmpty) continue;
         await SmsService.scheduleFor(item,
-            template: template, boardIndex: boardIndex);
+            template: template,
+            boardIndex: boardIndex,
+            defaultDurationMin: boardDuration);
       }
     }
   }
@@ -5139,7 +5278,8 @@ class _ManagementPageState extends State<ManagementPage>
                 ),
                 const SizedBox(height: 4),
                 _templateChip(tr('[NUME]', '[NAME]'), tr('Numele înregistrării', 'The name of the entry')),
-                _templateChip(tr('[DATA_EXPIRARE]', '[EXPIRY_DATE]'), tr('Data și ora expirării', 'The expiry date and time')),
+                _templateChip(tr('[DATA_PROGRAMARE]', '[APPOINTMENT_DATE]'), tr('Data și ora programării', 'The appointment date and time')),
+                _templateChip(tr('[DATA_EXPIRARE]', '[EXPIRY_DATE]'), tr('Ora de sfârșit a programării', 'The appointment end time')),
                 const SizedBox(height: 12),
                 TextField(
                   controller: ctrl,
@@ -5194,6 +5334,9 @@ class _ManagementPageState extends State<ManagementPage>
       decoration: InputDecoration(
         labelText: label,
         hintText: '+40712345678',
+        errorText: ctrl.text.trim().isNotEmpty && !isPlausiblePhone(ctrl.text)
+            ? tr('Număr de telefon invalid', 'Invalid phone number')
+            : null,
         border: const OutlineInputBorder(),
         prefixIcon: const Icon(Icons.phone_outlined, size: 18),
         isDense: true,

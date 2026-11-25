@@ -26,8 +26,10 @@ class SmsAlarmReceiver : BroadcastReceiver() {
                     )
                     JSONObject(prefs.getString("flutter.sms_alarm_$alarmId", null) ?: return@Thread)
                 }
-                val phone   = json.optString("phone")
-                val message = json.optString("message")
+                // optString întoarce textul "null" pentru o valoare JSON null —
+                // fără verificare, SMS-ul pleca spre numărul „null”.
+                val phone   = if (json.isNull("phone")) "" else json.optString("phone").trim()
+                val message = if (json.isNull("message")) "" else json.optString("message")
 
                 if (phone.isBlank() || message.isBlank()) return@Thread
 

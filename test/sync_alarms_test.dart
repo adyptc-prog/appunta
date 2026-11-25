@@ -15,8 +15,10 @@ Map<String, Object?> _item(int number, String syncId, String phone) => {
       'name': 'Client $number',
       'description': '',
       'createdAt': '2026-10-01T10:00:00.000',
+      // Programare 11:00–12:00 (durata 60), alertă cu o oră înainte de început.
       'expiresAt': '2030-01-0${number}T12:00:00.000',
-      'warningAt': '2030-01-0${number}T11:00:00.000',
+      'durationMin': 60,
+      'warningAt': '2030-01-0${number}T10:00:00.000',
       'phoneNumber': phone,
       'phoneNumber2': null,
       'phoneNumber3': null,
@@ -121,15 +123,16 @@ void main() {
     // „cccc” devine numărul 2: alarmele lui trebuie să rămână programate
     // sub 2, cu payload-ul salvat.
     expect(lastSmsOp(210), 'schedule');
-    expect(lastSmsOp(220), 'schedule');
+    // Fără SMS „EXPIRAT” la sfârșitul programării.
+    expect(lastSmsOp(220), isNot('schedule'));
     final prefs = await SharedPreferences.getInstance();
-    expect(jsonDecode(prefs.getString('sms_alarm_220')!)['phone'], '0733333333');
+    expect(jsonDecode(prefs.getString('sms_alarm_210')!)['phone'], '0733333333');
     // Numărul 3 nu mai există.
     expect(lastSmsOp(320), 'cancel');
     expect(prefs.containsKey('sms_alarm_320'), isFalse);
   });
 
-  testWidgets('rezervarea prin bot nu primește SMS „EXPIRAT”, cea manuală da',
+  testWidgets('nicio programare nu mai primește SMS „EXPIRAT” la final',
       (tester) async {
     String add(String syncId, {bool bot = false}) => 'ORG:A:${jsonEncode({
           's': syncId,
@@ -147,7 +150,7 @@ void main() {
 
     // Numerele 4 (bot) și 5 (manual): expirare = n*100+20.
     expect(lastSmsOp(420), isNot('schedule'));
-    expect(lastSmsOp(520), 'schedule');
+    expect(lastSmsOp(520), isNot('schedule'));
     final prefs = await SharedPreferences.getInstance();
     final items = jsonDecode(prefs.getString('management_items_b1')!) as List;
     expect(items.firstWhere((i) => i['syncId'] == 'botb')['viaBot'], isTrue);
@@ -218,8 +221,9 @@ void main() {
 
     final items = jsonDecode(prefs.getString('management_items_b1')!) as List;
     final bot = items.firstWhere((i) => i['syncId'] == 'botw');
+    // 45 min înainte de ora programării (10:00), nu de sfârșit.
     expect(DateTime.parse(bot['warningAt'] as String),
-        DateTime(2030, 1, 5, 9, 45));
+        DateTime(2030, 1, 5, 9, 15));
     expect(lastSmsOp(410), 'schedule');
     expect(items.firstWhere((i) => i['syncId'] == 'part')['warningAt'], isNull);
   });
@@ -242,7 +246,7 @@ void main() {
         isTrue);
     await tester.tap(find.text('2 ore înainte'));
     await settle(tester);
-    expect(find.text('Alerta pleacă la: 01.01.2030 10:00'), findsOneWidget);
+    expect(find.text('Alerta pleacă la: 01.01.2030 09:00'), findsOneWidget);
     await tester.tap(find.text('Salvează'));
     await settle(tester);
 
@@ -250,6 +254,6 @@ void main() {
     expect(prefs.getInt('alert_lead_minutes_b1'), 120);
     final items = jsonDecode(prefs.getString('management_items_b1')!) as List;
     expect(DateTime.parse(items.first['warningAt'] as String),
-        DateTime(2030, 1, 1, 10, 0));
+        DateTime(2030, 1, 1, 9, 0));
   });
 }

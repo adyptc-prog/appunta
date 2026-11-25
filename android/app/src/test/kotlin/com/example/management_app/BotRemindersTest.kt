@@ -39,8 +39,8 @@ class BotRemindersTest {
             .putLong("flutter.work_start_b1", 0L)
             .putLong("flutter.work_end_b1", 24L * 60 - 1)
             .putString("flutter.management_items_b1", "[]")
-            // Alerta cu 15 min înainte de final: pentru primul slot liber
-            // (început ≥ acum, durată 30) e mereu în viitor.
+            // Alerta cu 15 min înainte de ÎNCEPUT: pentru al doilea slot liber
+            // (început ≥ acum + 30 min) e mereu în viitor.
             .putLong("flutter.alert_lead_minutes_b1", 15L)
             .putString("flutter.sms_template", "Salut [NUME], ne vedem la [DATA_EXPIRARE]")
             .commit()
@@ -57,7 +57,8 @@ class BotRemindersTest {
 
     private fun book(): Pair<String, String> {
         receiver.handleMessage(context, client, "liber")
-        receiver.handleMessage(context, client, "1")
+        // Al doilea interval: începe sigur peste cel puțin 30 de minute.
+        receiver.handleMessage(context, client, "2")
         val entry = JSONArray(SmsSyncReceiver.snapshot(context)).getJSONObject(0)
         val syncId = JSONObject(entry.getString("msg").removePrefix("ORG:A:")).getString("s")
         return entry.getString("id") to syncId
@@ -124,7 +125,7 @@ class BotRemindersTest {
     @Test
     fun `mesajul foloseste formatul de data al aplicatiei`() {
         assertEquals("X 0712 05.01.2030 10:30",
-            BotReminders.buildMessage("X [NUME] [DATA_EXPIRARE]", "0712",
-                LocalDateTime.of(2030, 1, 5, 10, 30)))
+            BotReminders.buildMessage("X [NUME] [DATA_PROGRAMARE]", "0712",
+                LocalDateTime.of(2030, 1, 5, 10, 30), LocalDateTime.of(2030, 1, 5, 11, 0)))
     }
 }

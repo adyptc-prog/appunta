@@ -199,7 +199,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_circle_rounded));
     await tester.pumpAndSettle();
     expect(find.textContaining('Check-in'), findsNothing);
-    expect(find.text('Data expirare: nesetată'), findsOneWidget);
+    expect(find.text('Ora programării: nesetată'), findsOneWidget);
   });
 }
 

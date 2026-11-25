@@ -168,7 +168,10 @@ void main() {
     Future<void> tapSync(WidgetTester tester, {String code = 'k7qm-2xpa'}) async {
       await tester.pumpWidget(const ManagementApp());
       await settle(tester);
-      await tester.tap(find.byTooltip('Configurează sincronizare'));
+      // Sincronizarea e în meniul „Mai multe”.
+      await tester.tap(find.byTooltip('Mai multe'));
+      await settle(tester);
+      await tester.tap(find.text('Sincronizare'));
       await settle(tester);
       await tester.enterText(
           find.widgetWithText(TextField, 'Număr telefon partener *'), '0722000111');
@@ -212,7 +215,10 @@ void main() {
     testWidgets('„Generează cod” completează un cod valid', (tester) async {
       await tester.pumpWidget(const ManagementApp());
       await settle(tester);
-      await tester.tap(find.byTooltip('Configurează sincronizare'));
+      // Sincronizarea e în meniul „Mai multe”.
+      await tester.tap(find.byTooltip('Mai multe'));
+      await settle(tester);
+      await tester.tap(find.text('Sincronizare'));
       await settle(tester);
       await tester.tap(find.byTooltip('Generează cod'));
       await settle(tester);

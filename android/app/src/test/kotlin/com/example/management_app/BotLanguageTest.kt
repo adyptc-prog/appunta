@@ -170,13 +170,18 @@ class BotLanguageTest {
         assertEquals(BotReminders.DEFAULT_TEMPLATE_EN, BotReminders.effectiveTemplate(null))
         assertEquals(BotReminders.DEFAULT_TEMPLATE_EN, BotReminders.effectiveTemplate(BotReminders.DEFAULT_TEMPLATE_RO))
         assertEquals("Textul meu [NUME]", BotReminders.effectiveTemplate("Textul meu [NUME]"))
+        val end = at.plusMinutes(30)
         assertEquals(
-            "Reminder: Ana. It expires on 05.03.2027 11:00. Please take the necessary steps.",
-            BotReminders.buildMessage(BotReminders.effectiveTemplate(null), "Ana", at),
+            "Hi Ana! A reminder of your appointment on 05.03.2027 11:00. See you then!",
+            BotReminders.buildMessage(BotReminders.effectiveTemplate(null), "Ana", at, end),
         )
+        // Mesajul implicit vechi, salvat neschimbat, primește textul nou.
+        assertEquals(BotReminders.DEFAULT_TEMPLATE_EN, BotReminders.effectiveTemplate(
+            "Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps."))
         assertEquals(
-            "Ana/Ana 05.03.2027 11:00/05.03.2027 11:00",
-            BotReminders.buildMessage("[NUME]/[NAME] [DATA_EXPIRARE]/[EXPIRY_DATE]", "Ana", at),
+            "Ana/Ana 05.03.2027 11:00/05.03.2027 11:00 05.03.2027 11:30",
+            BotReminders.buildMessage(
+                "[NUME]/[NAME] [DATA_PROGRAMARE]/[APPOINTMENT_DATE] [DATA_EXPIRARE]", "Ana", at, end),
         )
     }
 

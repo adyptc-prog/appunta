@@ -1073,8 +1073,8 @@ class ClientBookingReceiver : BroadcastReceiver() {
         item.put("m", service.durationMin)
         // Alerta (reminderul SMS către client) cu intervalul ales în aplicație;
         // fără ea, rezervarea n-ar avea reminder deloc.
-        // Ca în aplicație, intervalul se socotește față de data de expirare (e).
-        val warning = end.minusMinutes(BookingSettings.loadAlertLeadMin(context, boardId).toLong())
+        // Ca în aplicație, intervalul se socotește față de ora programării (începutul).
+        val warning = start.minusMinutes(BookingSettings.loadAlertLeadMin(context, boardId).toLong())
         val hasWarning = warning.isAfter(LocalDateTime.now())
         if (hasWarning) item.put("w", warning.format(ISO_SHORT))
         // Rezervare făcută de client prin bot: telefonul e al clientului, nu
@@ -1083,7 +1083,7 @@ class ClientBookingReceiver : BroadcastReceiver() {
 
         enqueueSyncMessage(context, boardId, "ORG:A:$item")
         // Reminderul pleacă și dacă aplicația nu e deschisă până atunci.
-        if (hasWarning) BotReminders.schedule(context, syncId, sender, sender, warning, end)
+        if (hasWarning) BotReminders.schedule(context, syncId, sender, sender, warning, start, end)
         return syncId
     }
 

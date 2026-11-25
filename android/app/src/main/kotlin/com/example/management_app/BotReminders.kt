@@ -33,9 +33,15 @@ object BotReminders {
 
     // Identice cu _kDefaultSmsTemplateRo / _kDefaultSmsTemplateEn din Dart.
     const val DEFAULT_TEMPLATE_RO =
-        "Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare."
+        "Bună, [NUME]! Îți reamintim de programarea de pe [DATA_PROGRAMARE]. Te așteptăm!"
     const val DEFAULT_TEMPLATE_EN =
-        "Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps."
+        "Hi [NAME]! A reminder of your appointment on [APPOINTMENT_DATE]. See you then!"
+
+    // Mesajele implicite vechi — salvate neschimbate, sunt tratate tot ca implicite.
+    private val LEGACY_TEMPLATES = setOf(
+        "Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare.",
+        "Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps.",
+    )
 
     /**
      * Mesajul implicit urmează limba aplicației. Unul salvat identic cu un
@@ -43,7 +49,8 @@ object BotReminders {
      * rămâne neatins la schimbarea limbii (ca _effectiveSmsTemplate din Dart).
      */
     fun effectiveTemplate(saved: String?): String =
-        if (saved.isNullOrBlank() || saved == DEFAULT_TEMPLATE_RO || saved == DEFAULT_TEMPLATE_EN) {
+        if (saved.isNullOrBlank() || saved == DEFAULT_TEMPLATE_RO || saved == DEFAULT_TEMPLATE_EN ||
+            saved in LEGACY_TEMPLATES) {
             tr(DEFAULT_TEMPLATE_RO, DEFAULT_TEMPLATE_EN)
         } else {
             saved
@@ -68,14 +75,18 @@ object BotReminders {
     /** Textul reminderului, cu template-ul ales în aplicație (ca SmsService din Dart). */
     // Variabilele au nume în ambele limbi; un mesaj scris cu cele românești
     // funcționează și cu aplicația în engleză, și invers.
-    fun buildMessage(template: String, name: String, expiresAt: LocalDateTime): String =
+    fun buildMessage(
+        template: String, name: String, startsAt: LocalDateTime, expiresAt: LocalDateTime,
+    ): String =
         template.replace("[NUME]", name).replace("[NAME]", name)
+            .replace("[DATA_PROGRAMARE]", startsAt.format(DISPLAY_FMT))
+            .replace("[APPOINTMENT_DATE]", startsAt.format(DISPLAY_FMT))
             .replace("[DATA_EXPIRARE]", expiresAt.format(DISPLAY_FMT))
             .replace("[EXPIRY_DATE]", expiresAt.format(DISPLAY_FMT))
 
     fun schedule(
         context: Context, syncId: String, phone: String, name: String,
-        warningAt: LocalDateTime, expiresAt: LocalDateTime,
+        warningAt: LocalDateTime, startsAt: LocalDateTime, expiresAt: LocalDateTime,
     ) {
         val atMs = warningAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (atMs <= System.currentTimeMillis()) return
@@ -92,7 +103,7 @@ object BotReminders {
             val id = ID_BASE + next
             entries.put(syncId, JSONObject()
                 .put("id", id).put("at", atMs).put("phone", phone)
-                .put("message", buildMessage(template, name, expiresAt)))
+                .put("message", buildMessage(template, name, startsAt, expiresAt)))
             p.edit().putInt(COUNTER_KEY, next).putString(ENTRIES_KEY, entries.toString()).commit()
             id
         }

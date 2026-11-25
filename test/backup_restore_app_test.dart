@@ -81,7 +81,9 @@ void main() {
     expect(find.text('Ana Popescu'), findsOneWidget);
     expect(find.text('2 înregistrări'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Backup & restaurare'));
+    await tester.tap(find.byTooltip('Mai multe'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Backup & restaurare'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Restaurează din alt fișier'));
     await tester.pumpAndSettle();

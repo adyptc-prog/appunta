@@ -73,7 +73,7 @@ void main() {
       expect(find.text('SMS message'), findsOneWidget);
       expect(find.text('Nume'), findsNothing);
       expect(find.text('Raport'), findsNothing);
-      expect(find.byTooltip('App language'), findsOneWidget);
+      expect(find.byTooltip('More'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -83,7 +83,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Raport'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Limba aplicației'));
+      await tester.tap(find.byTooltip('Mai multe'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Limba aplicației'));
       await tester.pumpAndSettle();
       expect(find.text('Română'), findsOneWidget);
       await tester.tap(find.text('English'));
@@ -94,7 +96,9 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('app_language'), 'en');
 
-      await tester.tap(find.byTooltip('App language'));
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('App language'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Română'));
       await tester.pumpAndSettle();
@@ -125,9 +129,18 @@ void main() {
     }
 
     const ro =
-        'Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare.';
+        'Bună, [NUME]! Îți reamintim de programarea de pe [DATA_PROGRAMARE]. Te așteptăm!';
     const en =
-        'Reminder: [NAME]. It expires on [EXPIRY_DATE]. Please take the necessary steps.';
+        'Hi [NAME]! A reminder of your appointment on [APPOINTMENT_DATE]. See you then!';
+    const legacyRo =
+        'Alertă: [NUME]. Va expira la [DATA_EXPIRARE]. Te rugăm să iei măsurile necesare.';
+
+    testWidgets('mesajul implicit vechi, salvat neschimbat, primește textul nou',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'sms_template': legacyRo});
+      await AppLang.load();
+      expect(await templateShown(tester, 'Mesaj SMS'), ro);
+    });
 
     testWidgets('mesajul implicit urmează limba aplicației', (tester) async {
       expect(await templateShown(tester, 'Mesaj SMS'), ro);
